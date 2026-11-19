@@ -1,0 +1,18 @@
+{
+  "length_m": 6.0,
+  "depth_m": 0.40,
+  "flange_width_m": 0.20,
+  "flange_thickness_m": 0.025,
+  "web_thickness_m": 0.014,
+  "force_unit_n": 1000000.0,
+  "young_modulus_pa": 210000000000.0,
+  "poisson_ratio": 0.30,
+  "yield_stress_pa": 250000000.0,
+  "density_kg_m3": 7850.0,
+  "gravity_m_s2": 9.80665,
+  "mesh": {
+    "smoke": {"section_size_m": 0.035, "axial_size_m": 0.18},
+    "refinement": {"section_size_m": 0.014, "axial_size_m": 0.060},
+    "production": {"section_size_m": 0.009, "axial_size_m": 0.040}
+  }
+}
