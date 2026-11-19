@@ -12,8 +12,8 @@ setup_solver() {
         opensees) solver=(/mnt/nfshare/bin/openseesmp-ladruno) ;;
         kratos)
             solver=("$software/kratos-mpi-python" "$repo/solvers/kratos.py")
-            # This Trilinos build lacks a distributed sparse direct solver.
-            export KRATOS_LINEAR_SOLVER_JSON=${BENCH_KRATOS_SOLVER:-'{"solver_type":"multi_level","tolerance":1e-9,"max_iteration":1000}'}
+            # Amesos KLU is available in this Trilinos build. Validate scaling before production.
+            export KRATOS_LINEAR_SOLVER_JSON=${BENCH_KRATOS_SOLVER:-'{"solver_type":"amesos","amesos_solver_type":"Amesos_Klu"}'}
             ;;
         fenicsx) solver=("$software/fenicsx-python" "$repo/solvers/fenicsx.py") ;;
     esac
@@ -21,10 +21,6 @@ setup_solver() {
 
 setup_transport() {
     export BENCHMARK_TRANSPORT="$1"
-    if [[ "$1" != default ]]; then
-        # Apply the same job-local PMIx launch settings to both MPI data paths.
-        export SLURM_PMIX_FENCE=tree SLURM_PMIX_DIRECT_CONN=false
-    fi
 }
 
 launch() {

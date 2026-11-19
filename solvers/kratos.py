@@ -14,7 +14,7 @@ from KratosMultiphysics.StructuralMechanicsApplication.structural_mechanics_anal
 )
 import numpy as np
 
-from common import Output, arguments, read_model
+from common import Output, arguments, load_factor, read_model
 
 
 class BeamAnalysis(StructuralMechanicsAnalysis):
@@ -103,7 +103,7 @@ class BeamAnalysis(StructuralMechanicsAnalysis):
         for step in range(1, args.steps + 1):
             start = perf_counter()
             self.time = self._AdvanceTime()
-            factor = args.target * step / args.steps
+            factor = load_factor(args, step)
             acceleration_z = -self.beam["gravity_m_s2"] * factor
             for node in part.Nodes:
                 node.SetSolutionStepValue(KM.VOLUME_ACCELERATION_Z, acceleration_z)

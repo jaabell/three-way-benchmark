@@ -11,6 +11,8 @@ OpenSeesMP job 9020 and FEniCSx job 9021 ran complete nonlinear, four-rank pilot
 | External work | 8.74660 kJ | 8.74665 kJ |
 | Energy balance difference | 0.553% | 0.553% |
 
+At 1× gravity, all three four-rank pilots agreed at a downward tip displacement of 2.235629 mm. Kratos job 9024 used the installed Amesos KLU backend. KLU is a serial factorization inside the MPI analysis, so its scaling is part of the as-installed comparison.
+
 The stated balance difference includes numerical integration of external work over the load increments. The 30× endpoint was the requested pilot endpoint. Establish the continuum limit with the refinement and production meshes before interpreting collapse or comparing production timings.
 
 [Fields](fields.png) · [Load history](history.png) · [OpenSeesMP energy CSV](opensees-smoke-energy.csv) · [FEniCSx energy CSV](fenicsx-smoke-energy.csv) · [Hardware and installed software](hardware.md)

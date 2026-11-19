@@ -12,6 +12,7 @@ target=$9
 steps=${10}
 tolerance=${11}
 iterations=${12}
+first_factor=${13:-0.0}
 
 mkdir -p "$(dirname "$out")"
 mkdir "$out"
@@ -26,6 +27,7 @@ cp "$mesh/model.json" model.json
 cp "$site" site.sh
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$name" "$ranks" "$network" "$mode" "$target" "$steps" "$SLURM_JOB_ID" > case.tsv
+printf '%s\n' "$first_factor" > first_factor.txt
 printf '%s\n' "$SLURM_JOB_NODELIST" > nodelist
 scontrol show job "$SLURM_JOB_ID" > allocation.txt
 srun --mpi=none --nodes="$SLURM_JOB_NUM_NODES" --ntasks="$SLURM_JOB_NUM_NODES" --ntasks-per-node=1 \
@@ -58,7 +60,7 @@ fi
 # Separate the allocation/setup overhead from the solver process timing. Bash's
 # time works with site launch functions as well as ordinary MPI commands.
 TIMEFORMAT=$'%3R\t%3U\t%3S'
-{ time launch "${solver[@]}" "$mesh" "$out" "$mode" "$target" "$steps" "$tolerance" "$iterations" \
+{ time launch "${solver[@]}" "$mesh" "$out" "$mode" "$target" "$steps" "$tolerance" "$iterations" "$first_factor" \
        > solver.log 2>&1; } 2> timing.tsv
 for (( rank=0; rank<ranks; rank++ )); do
     if ! [[ -s progress-$rank.csv ]] || [[ $(wc -l < "progress-$rank.csv") != "$((steps + 1))" ]]; then

@@ -22,6 +22,8 @@ def run_metrics(path, case):
     if (nranks, transport, output) != tuple(case[key] for key in ("ranks", "transport", "output")):
         raise ValueError("run metadata differs from the submission")
     steps, target = int(nsteps), float(target)
+    first_factor_path = path / "first_factor.txt"
+    first_factor = float(first_factor_path.read_text()) if first_factor_path.exists() else 0.0
     rank_rows = [csv_rows(path / f"progress-{rank}.csv") for rank in range(ranks)]
     if any(len(rows) != steps for rows in rank_rows):
         raise ValueError("incomplete progress history")
@@ -29,7 +31,9 @@ def run_metrics(path, case):
     iterations = 0
     tip = float("nan")
     for step, rows in enumerate(zip(*rank_rows, strict=True), 1):
-        if any(int(row["step"]) != step or not math.isclose(float(row["factor"]), target * step / steps)
+        expected = (first_factor + (target - first_factor) * (step - 1) / (steps - 1)
+                    if first_factor else target * step / steps)
+        if any(int(row["step"]) != step or not math.isclose(float(row["factor"]), expected)
                for row in rows):
             raise ValueError("inconsistent load steps")
         tips = [float(row["tip_uz_m"]) for row in rows if row["tip_uz_m"]]

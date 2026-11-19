@@ -89,7 +89,9 @@ def convert(mesh, run, out, grid, xyz, volumes, spec, partial):
     weights = np.array([-1 / 20] * 4 + [1 / 5] * 6)
     base_force = np.bincount(cells.ravel(), (volumes[:, None] * weights).ravel(), minlength=nnodes)
     base_force *= -spec["density_kg_m3"] * spec["gravity_m_s2"]
-    previous_u, external_work = np.zeros(nnodes), 0.0
+    previous_u, external_work, previous_factor = np.zeros(nnodes), 0.0, 0.0
+    first_factor_path = run / "first_factor.txt"
+    first_factor = float(first_factor_path.read_text()) if first_factor_path.exists() else 0.0
     collection = ET.Element("VTKFile", type="Collection", version="0.1", byte_order="LittleEndian")
     data_sets = ET.SubElement(collection, "Collection")
 
@@ -141,9 +143,10 @@ def convert(mesh, run, out, grid, xyz, volumes, spec, partial):
             dissipated = fy * eq_plastic
             elastic_total = np.sum(elastic * gauss_volumes)
             plastic_total = np.sum(dissipated * gauss_volumes)
-            factor = target * step / nsteps
-            external_work += target * (step - 0.5) / nsteps * (base_force @ (u[:, 2] - previous_u))
-            previous_u = u[:, 2]
+            factor = (first_factor + (target - first_factor) * (step - 1) / (nsteps - 1)
+                      if first_factor else target * step / nsteps)
+            external_work += (factor + previous_factor) / 2 * (base_force @ (u[:, 2] - previous_u))
+            previous_u, previous_factor = u[:, 2], factor
             energy.writerow([step, factor, elastic_total, plastic_total, external_work,
                              external_work - elastic_total - plastic_total,
                              u[spec["tip_node"] - 1, 2], mises.max()])

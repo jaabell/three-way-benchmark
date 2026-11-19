@@ -1,5 +1,6 @@
 # Run with OpenSeesMP. Each rank builds its own Gmsh partition.
-lassign $argv mesh output mode target steps tolerance maxIterations
+lassign $argv mesh output mode target steps tolerance maxIterations firstFactor
+if {$firstFactor eq ""} {set firstFactor 0}
 source [file join $mesh model.tcl]
 set rank [getPID]
 set size [getNP]
@@ -43,7 +44,9 @@ if {$size == 1} {
 }
 test NormUnbalance [expr {$tolerance / $force_unit_n}] $maxIterations
 algorithm Newton
-integrator LoadControl [expr {double($target) / $steps}]
+set uniformIncrement [expr {double($target) / $steps}]
+set firstIncrement [expr {$firstFactor > 0 ? $firstFactor : $uniformIncrement}]
+integrator LoadControl $firstIncrement
 analysis Static
 
 proc writeFields {step nodes elements nodeFile cellFile forceUnit} {
@@ -75,6 +78,9 @@ if {$mode eq "full"} {
 barrier
 for {set step 1} {$step <= $steps} {incr step} {
     set start [clock microseconds]
+    if {$step == 2 && $firstFactor > 0} {
+        integrator LoadControl [expr {double($target - $firstFactor) / ($steps - 1)}]
+    }
     set code [analyze 1]
     set solveTime [expr {([clock microseconds] - $start) * 1.0e-6}]
     if {$code != 0} {error "Newton failed at step $step (return code $code)"}
@@ -87,7 +93,9 @@ for {set step 1} {$step <= $steps} {incr step} {
     }
     set tip ""
     if {$hasTip} {set tip [nodeDisp $tip_node 3]}
-    puts $progress "$step,[expr {double($target) * $step / $steps}],[testIter],$solveTime,$fieldTime,$tip"
+    set factor [expr {$firstFactor > 0 ? $firstFactor + ($step - 1) *
+        double($target - $firstFactor) / ($steps - 1) : $step * $uniformIncrement}]
+    puts $progress "$step,$factor,[testIter],$solveTime,$fieldTime,$tip"
     flush $progress
 }
 if {$mode eq "full"} {

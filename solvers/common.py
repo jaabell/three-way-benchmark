@@ -21,7 +21,14 @@ def arguments():
     parser.add_argument("steps", type=int)
     parser.add_argument("tolerance", type=float, help="Absolute residual tolerance, N")
     parser.add_argument("max_iterations", type=int)
+    parser.add_argument("first_factor", type=float, nargs="?", default=0.0)
     return parser.parse_args()
+
+
+def load_factor(args, step):
+    if not args.first_factor:
+        return args.target * step / args.steps
+    return args.first_factor + (args.target - args.first_factor) * (step - 1) / (args.steps - 1)
 
 
 def read_model(mesh):

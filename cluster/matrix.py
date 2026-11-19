@@ -40,6 +40,8 @@ def main():
     parser.add_argument("--pilot-transport", choices=("rdma-on", "rdma-off"))
     parser.add_argument("--pilot-output", choices=("minimal", "full"), default="full")
     parser.add_argument("--target", type=float, help="Gravity multiplier for nonlinear pilot")
+    parser.add_argument("--pilot-first-factor", type=float, default=0.0,
+                        help="First load factor in a nonlinear pilot, followed by equal steps")
     parser.add_argument("--steps", type=int, default=40, help="Number of steps in nonlinear pilot")
     parser.add_argument("--tolerance", type=float, default=0.1, help="Pilot residual tolerance, N")
     parser.add_argument("--max-iterations", type=int, default=35)
@@ -86,6 +88,9 @@ def main():
                 if (row[5], row[2]) in pilot_tiers and row[6:] == (args.pilot_output, 1)
                 and (args.solver is None or row[1] == args.solver)
                 and (args.pilot_transport is None or row[5] == args.pilot_transport)]
+    first_factor = args.pilot_first_factor
+    if first_factor and (args.pilot != "nonlinear" or steps < 2 or not 0 < first_factor < target):
+        parser.error("--pilot-first-factor requires a nonlinear pilot and 0 < first factor < target")
     if not rows:
         parser.error("no cases match the pilot options")
     if not (math.isfinite(target) and target > 0 and steps > 0
@@ -119,7 +124,7 @@ def main():
         (runs / "calibration.json").write_text(args.calibration.read_text())
     else:
         (runs / "pilot.json").write_text(json.dumps({
-            "kind": args.pilot, "target": target, "steps": steps,
+            "kind": args.pilot, "target": target, "steps": steps, "first_factor": first_factor,
             "residual_tolerance": tolerance, "max_iterations": iterations,
             "mesh_sha256": model["mesh_sha256"],
         }, indent=2) + "\n")
@@ -137,7 +142,7 @@ def main():
                 f"--output={runs}/slurm-%j.log", *node_args, *(pair_args if ranks == 32 else []),
                 str(snapshot / "cluster/run.sbatch"),
                 *map(str, [snapshot, site, mesh, runs / name, solver, ranks, network, mode,
-                           target, steps, tolerance, iterations]),
+                           target, steps, tolerance, iterations, first_factor]),
             ]
             print(shlex.join(command), flush=True)
             job = subprocess.check_output(command, text=True, env=launch_env).strip()

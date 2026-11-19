@@ -11,7 +11,7 @@ import numpy as np
 from petsc4py import PETSc
 import ufl
 
-from common import Output, arguments, read_model
+from common import Output, arguments, load_factor, read_model
 
 
 def solve(args):
@@ -89,7 +89,7 @@ def solve(args):
     comm.barrier()
     for step in range(1, args.steps + 1):
         start = perf_counter()
-        factor = args.target * step / args.steps
+        factor = load_factor(args, step)
         gravity.value[2] = -model["density_kg_m3"] * model["gravity_m_s2"] * factor / force_unit
         for iteration in range(args.max_iterations + 1):
             with r.localForm() as local:
