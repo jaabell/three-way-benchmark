@@ -8,6 +8,7 @@ time_limit=02:00:00
 pilot_time_limit=00:15:00
 
 setup_solver() {
+    mpi_bin="$stack/bin"
     case "$1" in
         opensees) solver=(/mnt/nfshare/bin/openseesmp-ladruno) ;;
         kratos)
@@ -15,7 +16,10 @@ setup_solver() {
             # Amesos KLU is available in this Trilinos build. Validate scaling before production.
             export KRATOS_LINEAR_SOLVER_JSON=${BENCH_KRATOS_SOLVER:-'{"solver_type":"amesos","amesos_solver_type":"Amesos_Klu"}'}
             ;;
-        fenicsx) solver=("$software/fenicsx-python" "$repo/solvers/fenicsx.py") ;;
+        fenicsx)
+            solver=("$software/fenicsx-python" "$repo/solvers/fenicsx.py")
+            mpi_bin=/mnt/covadongaflash/software/fenicsx/current/env/bin
+            ;;
     esac
 }
 
@@ -24,5 +28,14 @@ setup_transport() {
 }
 
 launch() {
-    srun --mpi=pmix --distribution=block:block --cpu-bind=cores bash "$repo/cluster/esmeralda-rank.sh" "$@"
+    if [[ "$BENCHMARK_TRANSPORT" != default && "${BENCH_TRANSPORT_LAUNCHER:-srun}" == prrte ]]; then
+        # Keep process launch inside this Slurm allocation using PRRTE's Slurm plugin.
+        export PATH="$mpi_bin:$PATH" PRTE_MCA_plm_slurm_args=--external-launcher
+        "$mpi_bin/mpirun" --prtemca plm slurm --prtemca ras slurm \
+            -n "$SLURM_NTASKS" --map-by ppr:16:node:PE=1 --bind-to core --report-bindings \
+            bash "$repo/cluster/esmeralda-rank.sh" "$@"
+    else
+        srun --mpi=pmix --distribution=block:block --cpu-bind=cores \
+            bash "$repo/cluster/esmeralda-rank.sh" "$@"
+    fi
 }
