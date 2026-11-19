@@ -53,5 +53,4 @@ The view exporter uses PyVista and writes a ParaView `beam.pvd` series, quadrati
 
 ## Local verification
 
-An existing serial OpenSees 3.8.0 build ran the smoke mesh locally. The local nonlinear pilot reached 27.058 in 12 increments. Esmeralda access and Herdr coordination were blocked by the current sandbox, so the cluster configuration, MPI adapters and production timings await on-cluster verification. The sandbox mounts the standard `.git` path read-only. The initialized local repository uses `.git-data`; from the project directory use `git --git-dir=.git-data status`.
-
+An existing serial OpenSees 3.8.0 build ran the smoke mesh locally. The local nonlinear pilot reached 27.058 in 12 increments. The final downward displacement was 60.88 mm, peak von Mises stress was 250 MPa, and estimated plastic dissipation was 33.88 J. Yielding began in the root flanges. The pilot did not establish the continuum collapse load. Its [energy and tip history](results/preliminary/openSees-local-energy.csv) is tracked here. Esmeralda access and Herdr coordination were blocked by the current sandbox, so the cluster configuration, MPI adapters and production timings await on-cluster verification. The sandbox mounts the standard `.git` path read-only. The initialized local repository uses `.git-data`; from the project directory use `git --git-dir=.git-data status`.

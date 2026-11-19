@@ -8,6 +8,7 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 from matplotlib.collections import PolyCollection
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pyvista as pv
 
@@ -28,9 +29,13 @@ def draw_mesh(path, png):
             ("Elastic energy density [kJ/m³]", surface.cell_data["elastic_energy_J_m3"] / 1000),
             ("Plastic dissipation density [kJ/m³]", surface.cell_data["plastic_dissipation_J_m3"] / 1000),
         ]
-    fields.append(("MPI partition", surface.cell_data["partition"]))
+    owners = surface.cell_data["partition"]
+    if fields and owners.min() == owners.max():
+        fields.append(("Axial strain [µε]", 1e6 * surface.cell_data["strain_xx_yy_zz_xy_yz_xz"][:, 0]))
+    else:
+        fields.append(("MPI partition", owners))
     projection = np.column_stack((xyz[:, 0] - 0.8 * xyz[:, 1],
-                                  xyz[:, 2] + 0.55 * xyz[:, 1] + 0.025 * xyz[:, 0]))
+                                  xyz[:, 2] + 0.55 * xyz[:, 1]))
     order = np.argsort(xyz[faces, 1].mean(axis=1))
     vertices = projection[faces[order]]
     columns = 2 if len(fields) > 1 else 1
@@ -46,7 +51,9 @@ def draw_mesh(path, png):
         ax.set_axis_off()
         ax.set_title(label)
         if label != "MPI partition" or values.max() > values.min():
-            fig.colorbar(patches, ax=ax, orientation="horizontal", shrink=0.55, pad=0.04)
+            colorbar = fig.colorbar(patches, ax=ax, orientation="horizontal", shrink=0.55, pad=0.04)
+            colorbar.locator = MaxNLocator(nbins=5, integer=(label == "MPI partition"))
+            colorbar.update_ticks()
     fig.savefig(png, dpi=180)
     plt.close(fig)
 

@@ -1,0 +1,39 @@
+{
+  "length_m": 6.0,
+  "depth_m": 0.4,
+  "flange_width_m": 0.2,
+  "flange_thickness_m": 0.025,
+  "web_thickness_m": 0.014,
+  "force_unit_n": 1000000.0,
+  "young_modulus_pa": 210000000000.0,
+  "poisson_ratio": 0.3,
+  "yield_stress_pa": 250000000.0,
+  "density_kg_m3": 7850.0,
+  "gravity_m_s2": 9.80665,
+  "mesh": {
+    "smoke": {
+      "section_size_m": 0.035,
+      "axial_size_m": 0.18
+    },
+    "refinement": {
+      "section_size_m": 0.014,
+      "axial_size_m": 0.06
+    },
+    "production": {
+      "section_size_m": 0.009,
+      "axial_size_m": 0.04
+    }
+  },
+  "resolution": "smoke",
+  "element_order": 2,
+  "node_count": 13041,
+  "element_count": 7140,
+  "clamp_node_count": 189,
+  "tip_node": 6803,
+  "volume_m3": 0.08939999999999998,
+  "area_m2": 0.0149,
+  "plastic_section_modulus_m3": 0.0023037500000000002,
+  "nominal_plastic_load_factor": 27.894992633692684,
+  "gmsh_version": "4.15.1",
+  "mesh_sha256": "603a046a1f2e17a49701277811a4c4b727356138ed140c1511b6f5d8b56353b0"
+}
