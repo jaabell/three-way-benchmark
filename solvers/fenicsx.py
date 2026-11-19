@@ -1,4 +1,4 @@
-"""DOLFINx 0.10 input. T10 on a four-point rule and fully implicit J2 return mapping."""
+"""DOLFINx 0.11 input. T10 on a four-point rule and fully implicit J2 return mapping."""
 
 from time import perf_counter
 
@@ -18,7 +18,7 @@ def solve(args):
     comm = MPI.COMM_WORLD
     if comm.rank == 0:
         print(f"DOLFINx {dolfinx.__version__}, Basix {basix.__version__}, PETSc {PETSc.Sys.getVersion()}")
-        print(MPI.Get_library_version(), flush=True)
+        print(MPI.Get_library_version().rstrip("\x00"), flush=True)
     model = read_model(args.mesh)
     p2 = basix.ufl.element("Lagrange", "tetrahedron", 2, shape=(3,))
     xyz, cells = np.empty((0, 3)), np.empty((0, 10), dtype=np.int64)
@@ -74,7 +74,7 @@ def solve(args):
 
     owned = np.arange(domain.topology.index_map(3).size_local, dtype=np.int32)
     cell_ids = domain.topology.original_cell_index[owned] + 1
-    geometry_nodes = domain.geometry.dofmap[owned].ravel()
+    geometry_nodes = domain.geometry.dofmaps[0][owned].ravel()
     node_ids, first = np.unique(domain.geometry.input_global_indices[geometry_nodes] + 1,
                                 return_index=True)
     cell_dofs = np.array([V.dofmap.cell_dofs(cell) for cell in owned], dtype=np.int32)

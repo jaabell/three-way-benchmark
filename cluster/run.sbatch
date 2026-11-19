@@ -21,7 +21,6 @@ setup_solver "$name"
 export OMP_NUM_THREADS=1 OMP_DYNAMIC=false OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1 MKL_DYNAMIC=false BLIS_NUM_THREADS=1
 export EIGEN_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
-export XDG_CACHE_HOME="$out/cache"
 cd "$out"
 cp "$mesh/model.json" model.json
 cp "$site" site.sh
@@ -50,7 +49,7 @@ fi
         sha256sum "$executable"
         ldd "$executable" || true
     fi
-    env | sort | grep -E '^(UCX_|OMPI_MCA_|FI_|I_MPI_|OMP_|MKL_|KRATOS_LINEAR_SOLVER_JSON=)' || true
+    env | sort | grep -E '^(UCX_|OMPI_MCA_|SLURM_PMIX_|BENCHMARK_TRANSPORT=|FI_|I_MPI_|OMP_|MKL_|KRATOS_LINEAR_SOLVER_JSON=)' || true
 } > runtime.txt 2>&1
 
 if [[ "$name" == opensees ]]; then
@@ -61,4 +60,10 @@ fi
 TIMEFORMAT=$'%3R\t%3U\t%3S'
 { time launch "${solver[@]}" "$mesh" "$out" "$mode" "$target" "$steps" "$tolerance" "$iterations" \
        > solver.log 2>&1; } 2> timing.tsv
+for (( rank=0; rank<ranks; rank++ )); do
+    if ! [[ -s progress-$rank.csv ]] || [[ $(wc -l < "progress-$rank.csv") != "$((steps + 1))" ]]; then
+        printf 'Incomplete progress on rank %d\n' "$rank" >&2
+        exit 1
+    fi
+done
 touch launcher-complete

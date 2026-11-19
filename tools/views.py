@@ -58,14 +58,26 @@ def contraction(a, b):
     return np.sum(a * b * [1, 1, 1, 2, 2, 2], axis=-1)
 
 
-def convert(mesh, run, out, grid, xyz, volumes, spec):
-    if not (run / "launcher-complete").exists():
+def convert(mesh, run, out, grid, xyz, volumes, spec, partial):
+    if not partial and not (run / "launcher-complete").exists():
         raise ValueError("Solver launcher did not finish successfully")
     _, nranks, _, mode, target, nsteps, _ = (run / "case.tsv").read_text().strip().split("\t")
     if mode != "full" or spec["mesh_sha256"] != json.loads(
             (run / "model.json").read_text())["mesh_sha256"]:
         raise ValueError("A complete run and its original mesh are required")
     nranks, nsteps, target = int(nranks), int(nsteps), float(target)
+    completed = nsteps
+    if partial:
+        lengths = set()
+        for rank in range(nranks):
+            with (run / f"progress-{rank}.csv").open(newline="") as source:
+                steps = [int(row["step"]) for row in csv.DictReader(source)]
+            if steps != list(range(1, len(steps) + 1)):
+                raise ValueError(f"Invalid progress history on rank {rank}")
+            lengths.add(len(steps))
+        if len(lengths) != 1 or not 0 < next(iter(lengths)) <= nsteps:
+            raise ValueError("Ranks do not agree on a nonempty set of completed steps")
+        completed = lengths.pop()
     nnodes, nelements = len(xyz), len(volumes)
     E, nu, fy = (spec[name] for name in ("young_modulus_pa", "poisson_ratio", "yield_stress_pa"))
     gauss_volumes = volumes[:, None] / 4
@@ -83,13 +95,13 @@ def convert(mesh, run, out, grid, xyz, volumes, spec):
 
     with ExitStack() as stack:
         nodal = list(frames(stack, [run / f"nodes-{rank}.bin" for rank in range(nranks)],
-                            NODE_RECORD, nsteps))
+                            NODE_RECORD, completed))
         gauss = list(frames(stack, [run / f"cells-{rank}.bin" for rank in range(nranks)],
-                            CELL_RECORD, nsteps))
+                            CELL_RECORD, completed))
         energy = csv.writer(stack.enter_context((out / "energy.csv").open("w")))
         energy.writerow(["step", "factor", "elastic_J", "plastic_dissipation_J",
                          "external_work_J", "balance_error_J", "tip_uz_m", "max_mises_Pa"])
-        for step in range(1, nsteps + 1):
+        for step in range(1, completed + 1):
             u = np.full((nnodes, 3), np.nan)
             stress = np.full((nelements, 4, 6), np.nan)
             strain = np.full_like(stress, np.nan)
@@ -159,14 +171,18 @@ def main():
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--run", type=Path)
     source.add_argument("--opensees-partitions", type=int, choices=(4, 8, 16, 32))
+    parser.add_argument("--last-converged", action="store_true",
+                        help="Export accepted steps from a stopped nonlinear pilot")
     args = parser.parse_args()
+    if args.last_converged and not args.run:
+        parser.error("--last-converged requires --run")
     spec = json.loads((args.mesh / "model.json").read_text())
     with np.load(args.mesh / "mesh.npz") as data:
         xyz, cells, volumes = data["xyz"], data["cells"], data["volumes"]
     grid = grid_from_mesh(xyz, cells)
     args.output.mkdir(parents=True, exist_ok=False)
     if args.run:
-        convert(args.mesh, args.run, args.output, grid, xyz, volumes, spec)
+        convert(args.mesh, args.run, args.output, grid, xyz, volumes, spec, args.last_converged)
     else:
         opensees_partitions(args.mesh, args.output, args.opensees_partitions, len(cells), grid)
 

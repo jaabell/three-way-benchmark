@@ -28,6 +28,8 @@ class BeamAnalysis(StructuralMechanicsAnalysis):
     def setup_parameters(self):
         args, beam = self.args, self.beam
         force_unit = beam["force_unit_n"]
+        # Kratos 10.3 reports the free-DOF L2 residual divided by its DOF count.
+        free_dofs = 3 * (beam["node_count"] - beam["clamp_node_count"])
         materials = args.output / "materials.json"
         if self.comm.Rank() == 0:
             materials.write_text(json.dumps({"properties": [{
@@ -71,7 +73,7 @@ class BeamAnalysis(StructuralMechanicsAnalysis):
                 "compute_reactions": False,
                 "convergence_criterion": "residual_criterion",
                 "residual_relative_tolerance": 0.0,
-                "residual_absolute_tolerance": args.tolerance / force_unit,
+                "residual_absolute_tolerance": args.tolerance / (force_unit * free_dofs),
                 "max_iteration": args.max_iterations,
                 "linear_solver_settings": json.loads(os.environ["KRATOS_LINEAR_SOLVER_JSON"])
             }
@@ -84,7 +86,8 @@ class BeamAnalysis(StructuralMechanicsAnalysis):
 
     def RunSolutionLoop(self):
         args = self.args
-        part = self.GetComputingModelPart()
+        solver = self._GetSolver()
+        part = solver.GetComputingModelPart()
         if not self.comm.IsDistributed() or self.comm.Size() < 2:
             raise RuntimeError("Kratos requires its MPI runtime for this benchmark")
         local = part.GetCommunicator().LocalMesh()
@@ -105,7 +108,8 @@ class BeamAnalysis(StructuralMechanicsAnalysis):
             for node in part.Nodes:
                 node.SetSolutionStepValue(KM.VOLUME_ACCELERATION_Z, acceleration_z)
             self.InitializeSolutionStep()
-            if not self.SolveSolutionStep():
+            solver.Predict()
+            if not solver.SolveSolutionStep():
                 raise RuntimeError(f"Newton failed at step {step}, gravity factor {factor:g}")
             self.FinalizeSolutionStep()
             solve_s = perf_counter() - start

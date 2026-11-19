@@ -5,9 +5,11 @@ import csv
 import itertools
 import json
 import math
+import os
 from pathlib import Path
 import random
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -33,6 +35,10 @@ def main():
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--submit", action="store_true", help="Submit all production repeats")
     action.add_argument("--pilot", choices=("elastic", "nonlinear", "transport"))
+    parser.add_argument("--solver", choices=SOLVERS, help="Run only this solver in a pilot")
+    parser.add_argument("--pilot-ranks", type=int, choices=(4, 8, 16), default=4)
+    parser.add_argument("--pilot-transport", choices=("rdma-on", "rdma-off"))
+    parser.add_argument("--pilot-output", choices=("minimal", "full"), default="full")
     parser.add_argument("--target", type=float, help="Gravity multiplier for nonlinear pilot")
     parser.add_argument("--steps", type=int, default=40, help="Number of steps in nonlinear pilot")
     parser.add_argument("--tolerance", type=float, default=0.1, help="Pilot residual tolerance, N")
@@ -73,11 +79,15 @@ def main():
         else:
             target, steps = 1.0, 2
         tolerance, iterations = args.tolerance, args.max_iterations
-        pilot_tiers = {("default", 4)} if args.pilot != "transport" else {
+        pilot_tiers = {("default", args.pilot_ranks)} if args.pilot != "transport" else {
             ("rdma-on", 32), ("rdma-off", 32)
         }
         rows = [row for row in rows
-                if (row[5], row[2]) in pilot_tiers and row[6:] == ("full", 1)]
+                if (row[5], row[2]) in pilot_tiers and row[6:] == (args.pilot_output, 1)
+                and (args.solver is None or row[1] == args.solver)
+                and (args.pilot_transport is None or row[5] == args.pilot_transport)]
+    if not rows:
+        parser.error("no cases match the pilot options")
     if not (math.isfinite(target) and target > 0 and steps > 0
             and math.isfinite(tolerance) and tolerance > 0 and iterations > 0):
         parser.error("load and convergence parameters must be finite and positive")
@@ -86,14 +96,25 @@ def main():
             ["bash", "-c", f'source "$1"; {format_string}', "_", site],
         ).decode().split("\0")[:-1]
 
-    time_limit, *node_args = site_options('printf "%s\\0" "$time_limit" "${new_node_args[@]}"')
+    time_setting = '"${pilot_time_limit:-$time_limit}"' if args.pilot else '"$time_limit"'
+    time_limit, *node_args = site_options(
+        f'printf "%s\\0" {time_setting} "${{new_node_args[@]}}"'
+    )
     if not node_args:
         parser.error("site configuration must select Esmeralda's new nodes")
     pair_args = site_options(
         'for opt in "${rdma_pair_args[@]}"; do printf "%s\\0" "$opt"; done'
     )
 
+    # Noninteractive login shells may omit the scheduler from PATH.
+    slurm_path, = site_options('printf "%s\\0" "$PATH"')
+    launch_env = {**os.environ, "PATH": slurm_path}
+
     runs.mkdir(parents=True, exist_ok=False)
+    snapshot = runs / "inputs"
+    for directory in ("cluster", "solvers", "model"):
+        shutil.copytree(REPO / directory, snapshot / directory,
+                        ignore=shutil.ignore_patterns("__pycache__", "site.sh"))
     if args.submit:
         (runs / "calibration.json").write_text(args.calibration.read_text())
     else:
@@ -114,12 +135,12 @@ def main():
                 "--exclusive", "--hint=nomultithread", "--cpus-per-task=1",
                 f"--nodes={nodes}", f"--ntasks={ranks}", f"--ntasks-per-node={per_node}",
                 f"--output={runs}/slurm-%j.log", *node_args, *(pair_args if ranks == 32 else []),
-                str(REPO / "cluster/run.sbatch"),
-                *map(str, [REPO, site, mesh, runs / name, solver, ranks, network, mode,
+                str(snapshot / "cluster/run.sbatch"),
+                *map(str, [snapshot, site, mesh, runs / name, solver, ranks, network, mode,
                            target, steps, tolerance, iterations]),
             ]
             print(shlex.join(command), flush=True)
-            job = subprocess.check_output(command, text=True).strip()
+            job = subprocess.check_output(command, text=True, env=launch_env).strip()
             writer.writerow([*row, job])
             out.flush()
 
