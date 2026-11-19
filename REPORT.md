@@ -70,6 +70,8 @@ The refinement FEniCSx run reached 29× gravity and 78.84 mm downward tip displa
 
 Each row is one matched nonlinear pilot. Wall time covers the solver launch, setup, and execution. Solve and field-output times sum the slowest rank in each phase at every step. Field-output time includes field extraction, serialization, and buffered writes to the shared filesystem. Kratos uses its installed Amesos KLU backend, which factors on one rank inside the MPI analysis. These results compare the installed solver configurations. [Timing CSV](results/esmeralda/pilot-timings.csv)
 
+A follow-up Kratos run using distributed GMRES and overlapping KLU subdomains completed the same load path in **119.376 s**, 31.1% less wall time than the KLU baseline. It reproduced the tip displacement and the 56 Newton iterations. [Kratos solver comparison and settings](results/esmeralda/kratos-linear-solvers.md)
+
 ### 32-rank transport pilot
 
 FEniCSx ran two elastic increments on Esmeralda nodes 12 and 13 with 16 ranks per node. Both runs used PRRTE and the same physical port on each node. UCX logs confirmed the inter-node transports.
