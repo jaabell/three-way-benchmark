@@ -1,5 +1,7 @@
 # Esmeralda three-way finite-element benchmark
 
+[Read the illustrated benchmark report](REPORT.md) for the dimensioned model, downloadable Gmsh meshes, ParaView snapshots, and measured pilot timings.
+
 The model is a 6 m steel cantilever with a 400 mm deep, 200 mm wide I-section, 25 mm flanges and a 14 mm web. The root face is clamped in three directions. A uniform downward body force ramps from zero to a common gravity multiplier. All cases use small-strain kinematics, associative J2 flow, perfect plasticity at 250 MPa and straight-sided ten-node quadratic tetrahedra from Gmsh. The four-point integration rule and consistent body force are common across the three solvers. The model uses metres and meganewtons internally, with SI output. This keeps the installed OpenSees J2 local return-map tolerance below its initial residual.
 
 | Mesh | Quadratic tetrahedra | Nodes |
