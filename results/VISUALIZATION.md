@@ -24,9 +24,9 @@ Use the same ParaView version on your workstation as the `pvserver` installed on
 | --- | --- |
 | FEniCSx nonlinear animation | `views/esmeralda-nonlinear-fenicsx/beam.pvd` |
 | OpenSeesMP nonlinear animation | `views/esmeralda-nonlinear-opensees/beam.pvd` |
-| Kratos nonlinear animation | `views/esmeralda-nonlinear-kratos/beam.pvd` |
+| Kratos nonlinear animation | `views/esmeralda-nonlinear-kratos-30steps/beam.pvd` |
 | Elastic animations | `views/esmeralda-elastic-<solver>/beam.pvd` |
-| Actual FEniCSx partition and fields with RoCE or TCP | `views/esmeralda-fenicsx-rdma-on/beam.pvd` or `views/esmeralda-fenicsx-rdma-off/beam.pvd` |
+| Actual FEniCSx partition and fields with RoCE or TCP | `views/esmeralda-fenicsx-rdma-on-prrte/beam.pvd` or `views/esmeralda-fenicsx-rdma-off/beam.pvd` |
 | Planned OpenSeesMP production partition | `views/production/opensees-partitions-32.vtu` |
 | Production Gmsh mesh | `build/production/beam.msh` (open in Gmsh) |
 | Energy and load history | `energy.csv` next to each `beam.pvd` |
