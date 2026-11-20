@@ -51,7 +51,7 @@ fi
         sha256sum "$executable"
         ldd "$executable" || true
     fi
-    env | sort | grep -E '^(UCX_|OMPI_MCA_|SLURM_PMIX_|BENCHMARK_TRANSPORT=|FI_|I_MPI_|OMP_|MKL_|KRATOS_LINEAR_SOLVER_JSON=)' || true
+    env | sort | grep -E '^(UCX_|OMPI_MCA_|SLURM_PMIX_|BENCHMARK_TRANSPORT=|BENCH_TRANSPORT_LAUNCHER=|FI_|I_MPI_|OMP_|MKL_|KRATOS_LINEAR_SOLVER_JSON=)' || true
 } > runtime.txt 2>&1
 
 if [[ "$name" == opensees ]]; then

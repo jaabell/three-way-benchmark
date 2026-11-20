@@ -4,7 +4,7 @@
 
 Three independently implemented models of the same steel cantilever reached **30× gravity** on the common quadratic pilot mesh. The three predicted a downward tip displacement of **127.53 mm**, with a spread of **0.46 µm**. This report records the model, the meshes, the measured pilot timings, and the status of the production benchmark.
 
-[Model and mesh](#model-and-mesh) · [Response](#nonlinear-response) · [Timings](#measured-performance) · [Visualization](#open-the-model-and-results)
+[Model and mesh](#model-and-mesh) · [Response](#nonlinear-response) · [Timings](#measured-performance) · [Rank scaling and beam limit](results/esmeralda/scaling.md) · [Visualization](#open-the-model-and-results)
 
 ![Dimensioned I-beam with clamped root, downward gravity, and two views of the production Gmsh mesh](results/report/model-and-mesh.png)
 

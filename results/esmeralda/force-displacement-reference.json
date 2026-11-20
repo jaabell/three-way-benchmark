@@ -1,0 +1,11 @@
+{
+  "reference_weight_N": 6882.2089035,
+  "yield_force_N": 167543.4027777778,
+  "plastic_force_N": 191979.16666666672,
+  "plastic_moment_Nm": 575937.5000000001,
+  "plastic_multiplier": 27.894992633692684,
+  "first_yield_multiplier": 24.34442271762084,
+  "inertia_m4": 0.00040210416666666677,
+  "plastic_modulus_m3": 0.0023037500000000002,
+  "limit_tip_mm": 69.29682540928981
+}

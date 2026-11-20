@@ -51,7 +51,7 @@ python tools/views.py build/production views/run --run runs/benchmark/CASE_NAME
 python tools/render.py views/run
 ```
 
-The view exporter uses PyVista and writes a ParaView `beam.pvd` series, quadratic T10 VTUs and `energy.csv`. Use **Warp By Vector** with `displacement_m` for true-scale deformations. Use cell scalars for partitions, stress, strain, elastic energy and accumulated plastic dissipation. Energy is derived from the recorded integration-point history in postprocessing. The results also report external work and the balance error. The headless renderer uses Matplotlib and produces a field overview and load history.
+The view exporter uses VTK's Python bindings and writes a ParaView `beam.pvd` series, quadratic T10 VTUs and `energy.csv`. On Esmeralda, run it in a Slurm allocation with `/mnt/covadongaflash/software/bin/esmeralda-pvpython`. Use **Warp By Vector** with `displacement_m` for true-scale deformations. Use cell scalars for partitions, stress, strain, elastic energy and accumulated plastic dissipation. Energy is derived from the recorded integration-point history in postprocessing. The results also report external work and the balance error. The headless renderer uses Matplotlib and produces a field overview and load history.
 
 ## Local verification
 

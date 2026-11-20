@@ -33,7 +33,7 @@ def cases():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     action = parser.add_mutually_exclusive_group()
-    action.add_argument("--submit", action="store_true", help="Submit all production repeats")
+    action.add_argument("--submit", action="store_true", help="Submit every repeat for the calibrated mesh")
     action.add_argument("--pilot", choices=("elastic", "nonlinear", "transport"))
     parser.add_argument("--solver", choices=SOLVERS, help="Run only this solver in a pilot")
     parser.add_argument("--pilot-ranks", type=int, choices=(4, 8, 16), default=4)
@@ -66,9 +66,8 @@ def main():
         if not args.calibration:
             parser.error("--submit requires --calibration")
         calibration = json.loads(args.calibration.read_text())
-        if (model["resolution"] != "production"
-                or calibration["mesh_sha256"] != model["mesh_sha256"]):
-            parser.error("calibration must match the production mesh")
+        if calibration["mesh_sha256"] != model["mesh_sha256"]:
+            parser.error("calibration must match the requested mesh")
         target = float(calibration["target"])
         steps = int(calibration["steps"])
         tolerance = float(calibration["residual_tolerance"])
@@ -119,7 +118,7 @@ def main():
     snapshot = runs / "inputs"
     for directory in ("cluster", "solvers", "model"):
         shutil.copytree(REPO / directory, snapshot / directory,
-                        ignore=shutil.ignore_patterns("__pycache__", "site.sh"))
+                        ignore=shutil.ignore_patterns("__pycache__", "site.sh", "meshes"))
     if args.submit:
         (runs / "calibration.json").write_text(args.calibration.read_text())
     else:
@@ -128,6 +127,7 @@ def main():
             "residual_tolerance": tolerance, "max_iterations": iterations,
             "mesh_sha256": model["mesh_sha256"],
         }, indent=2) + "\n")
+    (runs / "model.json").write_text((mesh / "model.json").read_text())
     (runs / "site.sh").write_text(site.read_text())
     site = runs / "site.sh"
     with (runs / "submissions.tsv").open("w") as out:

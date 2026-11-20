@@ -9,7 +9,10 @@ import sys
 import xml.etree.ElementTree as ET
 
 import numpy as np
-import pyvista as pv
+from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
+from vtkmodules.vtkCommonCore import vtkPoints
+from vtkmodules.vtkCommonDataModel import VTK_QUADRATIC_TETRA, vtkCellArray, vtkUnstructuredGrid
+from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "solvers"))
 from common import CELL_RECORD, NODE_RECORD
@@ -17,10 +20,31 @@ from common import CELL_RECORD, NODE_RECORD
 
 def grid_from_mesh(xyz, cells):
     # VTK and Kratos both swap Gmsh's final two edge nodes.
-    vtk_cells = cells[:, [0, 1, 2, 3, 4, 5, 6, 7, 9, 8]]
-    connectivity = np.column_stack((np.full(len(cells), 10), vtk_cells)).ravel()
-    types = np.full(len(cells), int(pv.CellType.QUADRATIC_TETRA), dtype=np.uint8)
-    return pv.UnstructuredGrid(connectivity, types, xyz)
+    connectivity = cells[:, [0, 1, 2, 3, 4, 5, 6, 7, 9, 8]].ravel().astype(np.int64)
+    offsets = np.arange(0, len(connectivity) + 1, 10, dtype=np.int64)
+    vtk_cells = vtkCellArray()
+    vtk_cells.SetData(numpy_to_vtkIdTypeArray(offsets, deep=True),
+                      numpy_to_vtkIdTypeArray(connectivity, deep=True))
+    points = vtkPoints()
+    points.SetData(numpy_to_vtk(xyz, deep=True))
+    grid = vtkUnstructuredGrid()
+    grid.SetPoints(points)
+    grid.SetCells(VTK_QUADRATIC_TETRA, vtk_cells)
+    return grid
+
+
+def add_array(attributes, name, values):
+    array = numpy_to_vtk(values, deep=True)
+    array.SetName(name)
+    attributes.AddArray(array)
+
+
+def save_grid(grid, path):
+    writer = vtkXMLUnstructuredGridWriter()
+    writer.SetFileName(str(path))
+    writer.SetInputData(grid)
+    if writer.Write() != 1:
+        raise OSError(f"VTK could not write {path}")
 
 
 def opensees_partitions(mesh, out, ranks, nelements, grid):
@@ -34,8 +58,8 @@ def opensees_partitions(mesh, out, ranks, nelements, grid):
         owners[ids] = rank
     if np.any(owners < 0):
         raise ValueError("Mesh has unassigned cells")
-    grid.cell_data["partition"] = owners
-    grid.save(out / f"opensees-partitions-{ranks}.vtu")
+    add_array(grid.GetCellData(), "partition", owners)
+    save_grid(grid, out / f"opensees-partitions-{ranks}.vtu")
 
 
 def frames(stack, paths, dtype, steps):
@@ -151,16 +175,17 @@ def convert(mesh, run, out, grid, xyz, volumes, spec, partial):
                              external_work - elastic_total - plastic_total,
                              u[spec["tip_node"] - 1, 2], mises.max()])
 
-            grid.point_data["displacement_m"] = u
-            grid.cell_data["partition"] = owners
-            grid.cell_data["stress_Pa_xx_yy_zz_xy_yz_xz"] = stress.mean(axis=1)
-            grid.cell_data["strain_xx_yy_zz_xy_yz_xz"] = strain.mean(axis=1)
-            grid.cell_data["von_Mises_Pa"] = mises.mean(axis=1)
-            grid.cell_data["equivalent_plastic_strain"] = eq_plastic.mean(axis=1)
-            grid.cell_data["elastic_energy_J_m3"] = elastic.mean(axis=1)
-            grid.cell_data["plastic_dissipation_J_m3"] = dissipated.mean(axis=1)
+            add_array(grid.GetPointData(), "displacement_m", u)
+            cell_data = grid.GetCellData()
+            add_array(cell_data, "partition", owners)
+            add_array(cell_data, "stress_Pa_xx_yy_zz_xy_yz_xz", stress.mean(axis=1))
+            add_array(cell_data, "strain_xx_yy_zz_xy_yz_xz", strain.mean(axis=1))
+            add_array(cell_data, "von_Mises_Pa", mises.mean(axis=1))
+            add_array(cell_data, "equivalent_plastic_strain", eq_plastic.mean(axis=1))
+            add_array(cell_data, "elastic_energy_J_m3", elastic.mean(axis=1))
+            add_array(cell_data, "plastic_dissipation_J_m3", dissipated.mean(axis=1))
             filename = f"step-{step:04d}.vtu"
-            grid.save(out / filename)
+            save_grid(grid, out / filename)
             ET.SubElement(data_sets, "DataSet", timestep=str(factor), group="", part="0", file=filename)
 
     ET.indent(collection)

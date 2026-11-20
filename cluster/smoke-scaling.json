@@ -1,0 +1,7 @@
+{
+  "mesh_sha256": "603a046a1f2e17a49701277811a4c4b727356138ed140c1511b6f5d8b56353b0",
+  "target": 30.0,
+  "steps": 30,
+  "residual_tolerance": 0.1,
+  "max_iterations": 18
+}

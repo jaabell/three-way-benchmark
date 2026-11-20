@@ -4,7 +4,7 @@ stack=/mnt/covadongaflash/software/stack/debian13
 software=/mnt/covadongaflash/software/bin
 new_node_args=(--partition=new --mem=54G)
 rdma_pair_args=(--nodelist=node12,node13)
-time_limit=02:00:00
+time_limit=${BENCH_TIME_LIMIT:-02:00:00}
 pilot_time_limit=00:15:00
 
 setup_solver() {

@@ -1,30 +1,31 @@
 # Open the Esmeralda results in ParaView
 
-Use the same ParaView version on your workstation as the `pvserver` installed on Esmeralda. The files already live on cluster storage.
+Esmeralda runs ParaView Server 6.2.1. Use ParaView 6.2.x on your workstation. The files already live on cluster storage.
 
-1. On your workstation, start the server in a Slurm allocation and leave this terminal open.
-
-   ```sh
-   ssh -t jle 'bash /mnt/covadongaflash/users/jaabell/three-way-benchmark/cluster/paraview.sh'
-   ```
-
-   The script uses `pvserver` from the compute node's PATH. You can pass a node, a port, and the installed server's full path. For example, run the script with `node12 11111 /path/to/pvserver` if the installation is outside PATH. Wait for the server to print that it is accepting connections.
-
-2. In another workstation terminal, forward the port to the server through Esmeralda. The example uses the script's default node and port.
+1. On your workstation, submit a server on the partition that can access the project storage.
 
    ```sh
-   ssh -N -J jle -L 127.0.0.1:11111:127.0.0.1:11111 jaabell@node12
+   ssh -t jle 'paraview-server -p new -n 1 -m 4G -t 1:00:00'
    ```
 
-3. In your workstation's ParaView, choose **File → Connect → Add Server**. Select **Client / Server**, host `127.0.0.1`, port `11111`, and manual startup. Click **Connect**.
+   Once the job starts, the command prints the private node address, port, and connection ID. Use `ssh jle 'paraview-server --list'` to retrieve them again. The job can queue while the benchmarks occupy both nodes.
 
-4. Use **File → Open** to browse the cluster directory `/mnt/covadongaflash/users/jaabell/three-way-benchmark`. The ParaView server reads these paths directly. Press **Ctrl+C** in the first terminal when you finish so Slurm releases the allocation.
+2. On your workstation, use the printed SSH tunnel command with the `jle` alias. Substitute the printed address and port for the placeholders and leave the tunnel open.
+
+   ```sh
+   ssh -N -L 127.0.0.1:11111:NODE_IP:SERVER_PORT jle
+   ```
+
+3. Start your workstation's ParaView with `paraview --connect-id=CONNECTION_ID` using the printed connection ID. Choose **File → Connect → Add Server**. Select **Client / Server**, host `127.0.0.1`, port `11111`, and manual startup. Click **Connect**.
+
+4. Use **File → Open** to browse the cluster directory `/mnt/covadongaflash/users/jaabell/three-way-benchmark`. The server reads these paths directly. Disconnect when finished, or stop the allocation with `ssh jle 'paraview-server --stop JOB_ID'` using the printed job ID.
 
 | What to open | Path relative to the project directory |
 | --- | --- |
 | FEniCSx nonlinear animation | `views/esmeralda-nonlinear-fenicsx/beam.pvd` |
 | OpenSeesMP nonlinear animation | `views/esmeralda-nonlinear-opensees/beam.pvd` |
 | Kratos nonlinear animation | `views/esmeralda-kratos-mumps/beam.pvd` |
+| Fine-mesh nonlinear animations | `views/esmeralda-refinement-<solver>/beam.pvd` for `opensees`, `kratos`, or `fenicsx` once export jobs 9674–9676 finish |
 | Elastic animations | `views/esmeralda-elastic-<solver>/beam.pvd` |
 | Actual FEniCSx partition and fields with RoCE or TCP | `views/esmeralda-fenicsx-rdma-on-prrte/beam.pvd` or `views/esmeralda-fenicsx-rdma-off/beam.pvd` |
 | Actual Kratos MUMPS partitions with RoCE or TCP | `views/esmeralda-kratos-mumps-rdma-on/beam.pvd` or `views/esmeralda-kratos-mumps-rdma-off/beam.pvd` |
