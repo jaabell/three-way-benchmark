@@ -1,5 +1,6 @@
 """DOLFINx 0.11 input. T10 on a four-point rule and fully implicit J2 return mapping."""
 
+import os
 from time import perf_counter
 
 import basix.ufl
@@ -14,7 +15,7 @@ import ufl
 from common import Output, arguments, load_factor, read_model
 
 
-def solve(args):
+def solve(args, cuda=None):
     comm = MPI.COMM_WORLD
     if comm.rank == 0:
         print(f"DOLFINx {dolfinx.__version__}, Basix {basix.__version__}, PETSc {PETSc.Sys.getVersion()}")
@@ -65,12 +66,13 @@ def solve(args):
     J = fem.form(ufl.derivative(residual, u, du))
     update = fem.Expression(plastic_update, points)
     A, r = petsc.create_matrix(J), petsc.create_vector(V)
-    linear = PETSc.KSP().create(comm)
-    linear.setType("preonly")
-    linear.getPC().setType("lu")
-    linear.getPC().setFactorSolverType("mumps")
-    linear.setOperators(A)
-    linear.setErrorIfNotConverged(True)
+    if cuda is None:
+        linear = PETSc.KSP().create(comm)
+        linear.setType("preonly")
+        linear.getPC().setType("lu")
+        linear.getPC().setFactorSolverType("mumps")
+        linear.setOperators(A)
+        linear.setErrorIfNotConverged(True)
 
     owned = np.arange(domain.topology.index_map(3).size_local, dtype=np.int32)
     cell_ids = domain.topology.original_cell_index[owned] + 1
@@ -107,7 +109,10 @@ def solve(args):
             petsc.assemble_matrix(A, J, bcs=bcs)
             A.assemble()
             r.scale(-1)
-            linear.solve(r, increment.x.petsc_vec)
+            if cuda is None:
+                linear.solve(r, increment.x.petsc_vec)
+            else:
+                cuda.solve(A, r, increment.x.petsc_vec)
             u.x.array[:] += increment.x.array
             u.x.scatter_forward()
         plastic_next.interpolate(update, cells0=owned)
@@ -127,10 +132,21 @@ def solve(args):
         output.step(step, factor, iteration, solve_s, output_s, tip_uz)
 
     output.close()
-    linear.destroy()
+    if cuda is None:
+        linear.destroy()
     r.destroy()
     A.destroy()
 
 
 if __name__ == "__main__":
-    solve(arguments())
+    args = arguments()
+    jax_python = os.environ.get("BENCH_FENICSX_JAX")
+    if jax_python:
+        from jax_sparse import CudaSparseSolver
+
+        if MPI.COMM_WORLD.size != 1:
+            raise ValueError("The CUDA sparse pilot supports one MPI rank")
+        with CudaSparseSolver(jax_python) as cuda:
+            solve(args, cuda)
+    else:
+        solve(args)

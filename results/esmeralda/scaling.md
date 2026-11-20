@@ -1,6 +1,6 @@
 # Esmeralda rank scaling and beam limit
 
-[Illustrated model report](../../REPORT.md) · [Interim timing table](scaling-snapshot.md) · [Hardware](hardware.md) · [ParaView instructions](../VISUALIZATION.md)
+[Illustrated model report](../../REPORT.md) · [Interim timing table](scaling-snapshot.md) · [Hardware](hardware.md) · [ParaView instructions](../VISUALIZATION.md) · [GPU pilots](gpu-pilot.md)
 
 The two sweeps use the same 6 m steel cantilever, small-strain J2 perfect plasticity, and Gmsh ten-node tetrahedra. Kratos uses the installed Amesos MUMPS backend. Each mesh has 90 runs covering 4, 8, 16 and 32 MPI ranks, minimal and full output, and three repeats per setting. The 32-rank runs use 16 physical cores on each of nodes 12 and 13, with separate RoCE and TCP runs. The other tiers fit on one node.
 
