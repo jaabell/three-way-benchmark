@@ -1,0 +1,118 @@
+import assert from 'node:assert/strict';
+import { mkdir, readFile } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
+import { chromium } from 'playwright-core';
+
+const target = process.env.EXPLORER_URL || 'http://127.0.0.1:8865/dist/';
+const args = ['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'];
+const bin = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
+const browser = await chromium.launch({executablePath:bin,headless:true,args});
+const output = new URL('../artifacts/',import.meta.url);
+await mkdir(output,{recursive:true});
+const manifest=JSON.parse(await readFile(new URL('../data/manifest.json',import.meta.url)));
+const errs=[];
+function monitor(page){
+  page.on('pageerror',e=>errs.push(String(e)));
+  page.on('response',r=>{if(r.status()>=400)errs.push(`${r.status()} ${r.url()}`);});
+}
+try {
+  const page=await browser.newPage({viewport:{width:1440,height:1000}});
+  monitor(page);
+  await page.goto(target,{waitUntil:'networkidle'});
+  await page.waitForSelector('#view-a[data-load="29"][data-run="os-fine"]');
+  await page.waitForSelector('#view-b[data-load="29"][data-run="fx-fine"]');
+  assert.match(await page.locator('#tip-a').innerText(),/78\.839/);
+  assert.match(await page.locator('#load-readout').innerText(),/199\.58/);
+  assert.equal(await page.locator('meta[name=robots]').getAttribute('content'),'noindex, nofollow, noarchive');
+  await page.screenshot({path:new URL('desktop.png',output).pathname,fullPage:true});
+
+  for(const key of ['displacement','strain','plastic','elastic','dissipation','partition','stress']){
+    await page.selectOption('#field',key);
+    await page.waitForSelector(`#view-a[data-field="${key}"]`);
+    await page.waitForSelector(`#view-b[data-field="${key}"]`);
+    assert((await page.locator('#legend-title').innerText()).length>5);
+  }
+  const info=manifest.meshes.fine;
+  const geo=gunzipSync(await readFile(new URL('../data/fine.bin.gz',import.meta.url)));
+  const idx=geo.readUInt32LE(4*(info.points*3+info.triangles*4));
+  await page.fill('#element',String(idx));
+  await page.click('#inspect button');
+  assert.match(await page.locator('#inspect-readout').innerText(),new RegExp(`element ${idx} · MPI rank`));
+
+  const before=await page.locator('#view-b canvas').screenshot();
+  await page.focus('#view-a');
+  await page.keyboard.press('ArrowRight');
+  const moved=await page.locator('#view-b canvas').screenshot();
+  assert(!before.equals(moved),'keyboard camera adjustment must move both views');
+  await page.click('#camera-end');
+  await page.click('#camera-orbit');
+
+  for(const run of manifest.runs) {
+    await page.selectOption('#run-a',run.id);
+    await page.waitForSelector(`#view-a[data-run="${run.id}"]`);
+  }
+  await page.selectOption('#run-b','fx-smoke');
+  await page.waitForSelector('#view-b[data-run="fx-smoke"]');
+  assert.equal(await page.locator('#load').getAttribute('max'),'30');
+  await page.fill('#load','30');
+  await page.waitForSelector('#view-a[data-load="30"]');
+  assert.match(await page.locator('#tip-a').innerText(),/127\.528/);
+  await page.selectOption('#scale','5');
+  await page.check('#wire');
+  await page.uncheck('#wire');
+  await page.click('[data-chart=energy]');
+  assert.match(await page.locator('#plot').textContent(),/Energy/);
+  await page.click('#reset-load');
+  await page.waitForSelector('#view-a[data-load="0"]');
+  assert.match(await page.locator('#tip-a').innerText(),/0\.000/);
+  await page.click('#play');
+  await page.waitForFunction(()=>Number(document.querySelector('#view-a').dataset.load)>0);
+  await page.click('#play');
+  assert.equal(await page.locator('#play').getAttribute('aria-pressed'),'false');
+  await page.click('#present');
+  assert(await page.locator('body').evaluate(el=>el.classList.contains('presentation')));
+  await page.click('#present');
+  assert.equal(await page.locator('#timings tbody tr').count(),5);
+  assert.match(await page.locator('#timings').innerText(),/111\.45/);
+  await page.click('[data-mesh=smoke]');
+  assert.match(await page.locator('#timings').innerText(),/12\.53/);
+  await page.selectOption('#timing-metric','bytes');
+  assert.match(await page.locator('#timings').innerText(),/105\./);
+  await page.click('.gpu-detail summary');
+  assert.match(await page.locator('#gpu-timings').innerText(),/310\.04/);
+  await page.locator('nav a[href="#machines"]').click();
+  assert.equal(new URL(page.url()).hash,'#machines');
+  await page.goBack();
+  assert.notEqual(new URL(page.url()).hash,'#machines');
+  await page.close();
+
+  const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,deviceScaleFactor:1,hasTouch:true,reducedMotion:'reduce'});
+  monitor(mobile);
+  await mobile.goto(target,{waitUntil:'networkidle'});
+  await mobile.waitForSelector('#view-b[data-load="29"]');
+  assert(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await mobile.screenshot({path:new URL('mobile.png',output).pathname,fullPage:true});
+  await mobile.close();
+
+  const embed=await browser.newPage({viewport:{width:768,height:1024}});
+  monitor(embed);
+  const wrapper = new URL('iframe-validation.html',target).href;
+  await embed.route(wrapper,route=>route.fulfill({contentType:'text/html',body:
+    `<!doctype html><title>Embed test</title><iframe title="Beam" src="${target}" style="width:100%;height:650px"></iframe>`}));
+  await embed.goto(wrapper);
+  await embed.frameLocator('iframe').locator('#view-a[data-load="29"]').waitFor();
+  await embed.close();
+
+  const fallbackBrowser=await chromium.launch({executablePath:bin,headless:true,args:[...args,'--disable-webgl']});
+  const fallback=await fallbackBrowser.newPage();
+  monitor(fallback);
+  await fallback.goto(target);
+  await fallback.locator('#fallback').waitFor();
+  assert.match(await fallback.locator('#timings').innerText(),/111\.45/);
+  await fallbackBrowser.close();
+
+  assert.deepEqual(errs,[]);
+  console.log('PASS desktop, all seven run selectors and fields, paired keyboard camera, element inspector, timeline, plots, timing tables, presentation, mobile, iframe, WebGL fallback, and no failed HTTP responses');
+} finally {
+  await browser.close();
+}
