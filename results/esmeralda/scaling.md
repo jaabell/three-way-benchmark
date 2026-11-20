@@ -1,6 +1,6 @@
 # Esmeralda rank scaling and beam limit
 
-[Illustrated model report](../../REPORT.md) · [Interim timing table](scaling-snapshot.md) · [Hardware](hardware.md) · [ParaView instructions](../VISUALIZATION.md) · [GPU pilots](gpu-pilot.md)
+[Illustrated model report](../../REPORT.md) · [Final timing tables](scaling-timings.md) · [Hardware](hardware.md) · [ParaView instructions](../VISUALIZATION.md) · [GPU pilots](gpu-pilot.md)
 
 The two sweeps use the same 6 m steel cantilever, small-strain J2 perfect plasticity, and Gmsh ten-node tetrahedra. Kratos uses the installed Amesos MUMPS backend. Each mesh has 90 runs covering 4, 8, 16 and 32 MPI ranks, minimal and full output, and three repeats per setting. The 32-rank runs use 16 physical cores on each of nodes 12 and 13, with separate RoCE and TCP runs. The other tiers fit on one node.
 
@@ -9,7 +9,7 @@ The two sweeps use the same 6 m steel cantilever, small-strain J2 perfect plasti
 | Smoke | 7,140 | 13,041 | 30 steps of 1× gravity | 9489–9578 |
 | Refinement | 69,600 | 116,781 | 29 steps of 1× gravity | 9582–9671 |
 
-The fine sweep is gated by three 16-rank nonlinear full-output checks at 29× gravity (9579–9581). The first 29 load increments match across the two meshes. For a like-for-like mesh comparison, the combined report's CSVs include solve and output times summed over those 29 steps. The smoke wall times also include the difficult 30th increment.
+All 180 runs validated. Three 16-rank nonlinear full-output checks at 29× gravity (9579–9581) qualified the fine sweep. The first 29 load increments match across the two meshes. For a like-for-like mesh comparison, the CSVs include solve and output times summed over those 29 steps. The smoke wall times also include the difficult 30th increment.
 
 ## Force–displacement
 
@@ -19,7 +19,7 @@ The vertical axis is the resultant of the uniform gravity load, $F=\lambda\rho A
 
 For the solid blue reference curve, the script integrates the capped uniaxial stress through the I-section to obtain moment versus curvature. It inverts that relation along the span and integrates $\kappa(x)(L-x)$ from clamp to tip. The reference reaches 69.30 mm downward tip displacement at the pure-bending limit. The 3D solid has a fully constrained end face, shear, and multiaxial stresses, so its near-clamp response differs from the beam idealization. [MIT beam deflections](https://ocw.mit.edu/courses/1-050-solid-mechanics-fall-2004/f9a4d5764b9b0f51ffaacbdf69f7aed8_emech10_04.pdf)
 
-The three smoke pilot curves overlap at this scale. The finer pilot curve is from FEniCSx job 9025.
+OpenSeesMP, Kratos, and FEniCSx overlap at this scale on each mesh. At 29× gravity, the representative 16-rank runs differ by 0.002 µm on the smoke mesh and 0.012 µm on the fine mesh.
 
 | Gravity | Applied weight (kN) | Smoke tip down (mm), FEniCSx | Fine tip down (mm), FEniCSx |
 | ---: | ---: | ---: | ---: |
@@ -32,6 +32,10 @@ At 29× the fine mesh deflects 6.27 mm more, an 8.6% increase, at a load 4.0% ab
 
 ## Timing and I/O results on Esmeralda
 
+At 32 ranks with full output on the fine mesh, RoCE reduced median wall time versus TCP by 17.9% for OpenSeesMP, 7.9% for Kratos, and 13.9% for FEniCSx. Each solver reached its lowest fine-mesh wall time at 32 ranks over RoCE in both output modes. At that setting, each full run wrote about 0.98–0.99 GB of raw field files. The median time measured inside the field-output phase was 5.14 s for OpenSeesMP, 5.91 s for Kratos, and 0.58 s for FEniCSx. That phase includes extraction, serialization, and writes through the page cache. [Final timing tables](scaling-timings.md)
+
+[Smoke medians](smoke-scaling-summary.csv) · [Smoke individual runs](smoke-scaling-measurements.csv) · [Fine medians](refinement-scaling-summary.csv) · [Fine individual runs](refinement-scaling-measurements.csv)
+
 All paths below are relative to `/mnt/covadongaflash/users/jaabell/three-way-benchmark`. The tables give median launcher wall time in seconds by solver, rank count, network and output mode. Each cell includes the number of validated repeats. The CSVs also report solve time, field-output time, field bytes, iterations and final tip displacement. Raw results, solver logs, node inventory and rank binding are kept in each case directory.
 
 | File | Contents |
@@ -42,12 +46,3 @@ All paths below are relative to `/mnt/covadongaflash/users/jaabell/three-way-ben
 | `runs/scaling-report/benchmark.md` | Both timing tables, written by job 9673 |
 | `runs/scaling-report/force-displacement.png` and `.csv` | Representative accepted full-output histories across both meshes, written by job 9673 |
 | `summary.csv`, `measurements.csv`, `validation.log` in each suite | Grouped medians and ranges, individual run results, and any excluded cases |
-
-To inspect current progress without waiting for the end-of-sweep reports, regenerate the tables from accepted runs.
-
-```sh
-ssh jle 'cd /mnt/covadongaflash/users/jaabell/three-way-benchmark &&
-  python3 tools/scaling_report.py runs/scaling-report/current.md \
-    runs/smoke-scaling runs/refinement-scaling &&
-  cat runs/scaling-report/current.md'
-```
