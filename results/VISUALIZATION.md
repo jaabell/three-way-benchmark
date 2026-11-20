@@ -25,6 +25,7 @@ Esmeralda runs ParaView Server 6.2.1. Use ParaView 6.2.x on your workstation. Th
 | FEniCSx nonlinear animation | `views/esmeralda-nonlinear-fenicsx/beam.pvd` |
 | OpenSeesMP nonlinear animation | `views/esmeralda-nonlinear-opensees/beam.pvd` |
 | Kratos nonlinear animation | `views/esmeralda-kratos-mumps/beam.pvd` |
+| FEniCSx RTX 5090 nonlinear animation | `views/esmeralda-gpu-fenicsx-smoke/beam.pvd` |
 | Fine-mesh nonlinear animations | `views/esmeralda-refinement-<solver>/beam.pvd` for `opensees`, `kratos`, or `fenicsx` once export jobs 9674–9676 finish |
 | Elastic animations | `views/esmeralda-elastic-<solver>/beam.pvd` |
 | Actual FEniCSx partition and fields with RoCE or TCP | `views/esmeralda-fenicsx-rdma-on-prrte/beam.pvd` or `views/esmeralda-fenicsx-rdma-off/beam.pvd` |

@@ -16,14 +16,15 @@ The RTX 5090 comparisons are separate from the 4–32-rank CPU sweep on nodes 12
 
 ## Measurements
 
-All three smoke elastic repeats per backend converged. The largest difference in downward tip displacement across the two increments was 15 pm. GPU QR took 4.4× the CPU MUMPS wall time.
+All 18 timed runs converged, with three repeats per profile and backend. CPU MUMPS was faster in each profile. [Individual run timings](gpu-pilot-timings.csv)
 
-| Smoke elastic | Repeats | Median wall (s) | Median solve (s) | Downward tip at 1× (mm) |
-| --- | ---: | ---: | ---: | ---: |
-| CPU MUMPS | 3 | 3.508 | 0.662 | 2.235629112 |
-| GPU sparse QR | 3 | 15.514 | 12.459 | 2.235629097 |
+| Profile | CPU MUMPS wall (s) | GPU wall (s) | CPU MUMPS solve (s) | GPU solve (s) | Largest tip difference |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Smoke elastic, GPU QR | 3.508 | 15.514 | 0.662 | 12.459 | 15 pm |
+| Smoke nonlinear, GPU QR | 19.101 | 310.042 | 15.785 | 306.728 | 29 pm |
+| Fine elastic, GPU CG | 15.006 | 46.690 | 11.858 | 43.149 | 1 pm |
 
-The first nonlinear CPU/GPU pair completed all 30 increments at 127.528 mm downward tip displacement. Wall time was 19.101 s for CPU MUMPS (job 9696) and 309.965 s for GPU QR (job 9694). The largest tip difference at an accepted increment was 29 pm.
+Times are medians. Tip differences are the largest observed across accepted increments and repeats. The nonlinear CPU and GPU runs reached 127.528 mm downward tip displacement at 30× gravity. The first CPU/GPU pair (9696 and 9694) differed by at most 0.00462 Pa in any stress component over all 28,560 integration points at that load. The GPU animation contains all 30 accepted frames.
 
 ## Esmeralda files
 
@@ -34,7 +35,7 @@ Paths relative to the project directory `/mnt/covadongaflash/users/jaabell/three
 | `runs/gpu-pilot/pilots.tsv` | Case directories, backends, and Slurm job IDs |
 | `runs/gpu-pilot/inventory-9684.log` | Hardware and driver inventory |
 | `runs/gpu-pilot/current.md` | Interim timing table |
-| `runs/gpu-pilot/benchmark.md` and `benchmark.csv` | Final timings, tip agreement, and individual measurements from Slurm job 9705 |
-| `views/esmeralda-gpu-fenicsx-smoke/beam.pvd` | Nonlinear GPU animation from export job 9709, following successful completion of job 9694 |
+| `runs/gpu-pilot/benchmark.md` and `benchmark.csv` | Final timings, tip agreement, and individual measurements |
+| `views/esmeralda-gpu-fenicsx-smoke/beam.pvd` | Nonlinear GPU animation exported by job 9709 from solver job 9694 |
 
 The standard FEniCSx input selects MUMPS by default. Set `BENCH_FENICSX_JAX=/mnt/covadongaflash/software/jupyter/envs/jax/bin/python` in a one-rank Slurm GPU job to select sparse QR. Set `BENCH_FENICSX_JAX_METHOD=cg` for the elastic conjugate-gradient pilot. The solver log identifies the CUDA device and records each linear solve. The CUDA phase includes transfers, JAX dispatch and synchronization. Launcher wall time includes the Python worker, data exchange, host assembly and field writes.
