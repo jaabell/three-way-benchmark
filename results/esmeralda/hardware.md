@@ -14,6 +14,6 @@ The compute nodes run Debian 13 and Slurm 24.11.5. The login host runs Ubuntu 22
 | --- | --- |
 | OpenSeesMP | ladruño, 3.8.0, commit `dfdf974251e05e30c8d0f338b0ea0de7fdd8cef4`, Open MPI 5, MUMPS |
 | FEniCSx | DOLFINx and Basix 0.11.0, PETSc 3.25.6 with MUMPS, Open MPI 5.0.11 in the site's conda environment |
-| Kratos | Kratos 10.3.0, Trilinos 14.4.0, METIS, Open MPI 5. The installed Amesos build provides KLU and lacks MUMPS and SuperLU_DIST. |
+| Kratos | Kratos 10.3.0, Trilinos 14.4.0, METIS, Open MPI 5. The 2026-11-20 release adds Amesos MUMPS 5.9.0 and Amesos and Amesos2 SuperLU_DIST 7.2.0. Earlier pilot records used the 2026-11-19 release with serial KLU. |
 
 Acknowledge ANID–Fondecyt project 11220530 in research outputs that benefit from Esmeralda, as requested in the cluster login notice.

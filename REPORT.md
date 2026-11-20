@@ -56,7 +56,7 @@ The matched smoke runs used four MPI ranks, 30 equal gravity increments, and a c
 
 ![Load-displacement and energy histories from the FEniCSx nonlinear pilot](results/esmeralda/history.png)
 
-The refinement FEniCSx run reached 29× gravity and 78.84 mm downward tip displacement. Newton failed at 30× on that mesh. On the production mesh, FEniCSx reached 29× and 81.69 mm downward displacement before MUMPS returned error −9 at the last increment. Kratos failed Newton convergence on its first production-mesh increment. The three-dimensional limit and a common production load path remain to be verified. [Refinement history](results/esmeralda/fenicsx-refinement-tip.csv) · [Production history](results/esmeralda/fenicsx-production-tip.csv)
+The refinement FEniCSx run reached 29× gravity and 78.84 mm downward tip displacement. Newton failed at 30× on that mesh. On the production mesh, FEniCSx reached 29× and 81.69 mm downward displacement before MUMPS returned error −9 at the last increment. Kratos with serial KLU failed Newton convergence on its first production-mesh increment. All three updated Kratos direct backends completed the two-step production-mesh elastic test on 16 ranks and agreed with FEniCSx at 1× gravity. MUMPS finished in 64.047 s, Amesos2 SuperLU_DIST in 69.640 s, and Amesos SuperLU_DIST in 204.698 s. The three-dimensional limit and a common production load path remain to be verified. [Refinement history](results/esmeralda/fenicsx-refinement-tip.csv) · [Production history](results/esmeralda/fenicsx-production-tip.csv)
 
 ## Measured performance
 
@@ -65,12 +65,12 @@ The refinement FEniCSx run reached 29× gravity and 78.84 mm downward tip displa
 | Solver | Slurm job | Linear backend | Wall | Solve | Field output | Files written |
 | --- | ---: | --- | ---: | ---: | ---: | ---: |
 | OpenSeesMP | 9020 | MUMPS | 17.056 s | 12.767 s | 3.597 s | 105.49 MB |
-| Kratos | 9036 | Amesos KLU | 173.375 s | 168.155 s | 4.067 s | 105.05 MB |
+| Kratos | 9481 | Amesos MUMPS | 29.238 s | 24.045 s | 4.082 s | 105.05 MB |
 | FEniCSx | 9021 | PETSc / MUMPS | 12.539 s | 9.624 s | 0.260 s | 105.51 MB |
 
-Each row is one matched nonlinear pilot. Wall time covers the solver launch, setup, and execution. Solve and field-output times sum the slowest rank in each phase at every step. Field-output time includes field extraction, serialization, and buffered writes to the shared filesystem. Kratos uses its installed Amesos KLU backend, which factors on one rank inside the MPI analysis. These results compare the installed solver configurations. [Timing CSV](results/esmeralda/pilot-timings.csv)
+Each row is one matched nonlinear pilot. Wall time covers the solver launch, setup, and execution. Solve and field-output times sum the slowest rank in each phase at every step. Field-output time includes field extraction, serialization, and buffered writes to the shared filesystem. All three configurations use MUMPS through their respective solver interfaces. [Timing CSV](results/esmeralda/pilot-timings.csv)
 
-A follow-up Kratos run using distributed GMRES and overlapping KLU subdomains completed the same load path in **119.376 s**, 31.1% less wall time than the KLU baseline. It reproduced the tip displacement and the 56 Newton iterations. [Kratos solver comparison and settings](results/esmeralda/kratos-linear-solvers.md)
+The revised Kratos MPI build cut wall time from **173.375 s with KLU** to **29.238 s with MUMPS**, a **5.93× speedup** on the same load path. Amesos SuperLU_DIST completed it in 31.204 s and Amesos2 SuperLU_DIST in 41.213 s. All three reproduced 56 Newton iterations and the reference tip displacement within 0.03 µm. [Kratos solver comparison and settings](results/esmeralda/kratos-linear-solvers.md)
 
 ### 32-rank transport pilot
 
@@ -81,7 +81,7 @@ FEniCSx ran two elastic increments on Esmeralda nodes 12 and 13 with 16 ranks pe
 | RDMA on | 9037 | RoCE / `rc_mlx5` | 23.609 s | 0.590 s |
 | RDMA off | 9033 | TCP | 16.086 s | 0.989 s |
 
-Startup accounted for most of the wall time in these two-step runs. The production campaign is designed to measure the transport effect over a longer nonlinear analysis with repeated runs.
+The paired Kratos MUMPS transport checks used the same nodes and launcher. RoCE took 12.807 s wall and 1.123 s solve, while TCP took 14.608 s wall and 1.635 s solve. Startup accounted for most of the wall time in these two-step runs. [Kratos transport data](results/esmeralda/kratos-direct-timings.csv) The production campaign is designed to measure the transport effect over a longer nonlinear analysis with repeated runs.
 
 ### Production matrix and hardware
 

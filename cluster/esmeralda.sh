@@ -13,8 +13,8 @@ setup_solver() {
         opensees) solver=(/mnt/nfshare/bin/openseesmp-ladruno) ;;
         kratos)
             solver=("$software/kratos-mpi-python" "$repo/solvers/kratos.py")
-            # Amesos KLU is available in this Trilinos build. Validate scaling before production.
-            export KRATOS_LINEAR_SOLVER_JSON=${BENCH_KRATOS_SOLVER:-'{"solver_type":"amesos","amesos_solver_type":"Amesos_Klu"}'}
+            # Use the installed distributed MUMPS backend for the three-way comparison.
+            export KRATOS_LINEAR_SOLVER_JSON=${BENCH_KRATOS_SOLVER:-'{"solver_type":"amesos","amesos_solver_type":"Amesos_Mumps"}'}
             ;;
         fenicsx)
             solver=("$software/fenicsx-python" "$repo/solvers/fenicsx.py")
