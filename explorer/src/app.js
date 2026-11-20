@@ -14,7 +14,7 @@ const state = {runs: [], field:'stress', scale:1, step:29, wire:false, ghost:tru
   chart:'force', timingMesh:'fine', playing:false, pin:null};
 const meshCache = new Map(), frames = new Map(), parts = new Map();
 const scenes = [null,null];
-let manifest, loaded = [], revision = 0, timer = 0;
+let manifest, loaded = [], revision = 0, timer = 0, byId;
 let webgl = true;
 const getRun = (slot) => state.runs[slot];
 const maxStep = () => Math.min(...state.runs.map(r=>r.traces.length-1));
@@ -228,6 +228,94 @@ function renderGpu() {
     }).join('')}</tbody>`;
 }
 
+function applyRun(slot, runId) {
+  pause();
+  state.runs[slot] = byId.get(runId);
+  state.pin = null;
+  $('run-' + slots[slot]).value = runId;
+  $('element').value = '';
+  $('inspect-readout').textContent = 'Select a surface element in either view.';
+  return setStep(state.step);
+}
+function setField(value) { state.field = value; $('field').value = value; renderScenes(); }
+function setScale(value) { state.scale = Number(value); $('scale').value = String(value); renderScenes(); }
+function setChart(kind) {
+  state.chart = kind;
+  for (const b of document.querySelectorAll('[data-chart]')) b.setAttribute('aria-pressed', String(b.dataset.chart === kind));
+  renderText();
+}
+function setTimingMesh(mesh) {
+  state.timingMesh = mesh;
+  for (const b of document.querySelectorAll('[data-mesh]')) b.setAttribute('aria-pressed', String(b.dataset.mesh === mesh));
+  renderTimings();
+}
+
+const chapters = [
+  { section: 'intro', kicker: 'Esmeralda · Finite-element study', title: 'The I-beam benchmark',
+    body: 'Three solvers, one steel cantilever. Watch a 6 m I-beam move from elastic bending into plastic collapse under its own amplified weight — modeled three independent ways on the same cluster.',
+    enter() {} },
+  { section: 'explore', kicker: 'The model', title: 'One cantilever, two meshes',
+    body: '6 m steel I-section, 400×200 mm, 25 mm flanges, 14 mm web, fixed at the root. Small-strain J2 plasticity: E = 210 GPa, ν = 0.30, σy = 250 MPa, ρ = 7,850 kg/m³. Ten-node tetrahedra, four integration points — 7,140 elements (“smoke”) or 69,600 (“fine”).',
+    enter() { applyRun(0,'os-fine'); applyRun(1,'fx-fine'); setField('displacement'); setScale(1); setStep(0); scenes[0]?.preset('side'); } },
+  { section: 'explore', kicker: 'Solver 1 of 3', title: 'OpenSeesMP 3.8.0 · “Ladruño”',
+    body: 'UC Berkeley’s MPI finite-element framework for nonlinear structural and earthquake simulation, using a MUMPS direct solver here. Fine mesh on 16 ranks (job 9580) beside the smoke mesh on 4 ranks (job 9020).',
+    enter() { applyRun(0,'os-fine'); applyRun(1,'os-smoke'); setField('stress'); setScale(1); setStep(29); scenes[0]?.preset('orbit'); } },
+  { section: 'explore', kicker: 'Solver 2 of 3', title: 'Kratos Multiphysics 10.3.0',
+    body: 'CIMNE’s general multi-physics framework, solved here with the Amesos MUMPS direct solver. Fine mesh on 16 ranks (job 9579) beside smoke on 4 ranks (job 9481).',
+    enter() { applyRun(0,'kr-fine'); applyRun(1,'kr-smoke'); setField('stress'); setStep(29); } },
+  { section: 'explore', kicker: 'Solver 3 of 3', title: 'FEniCSx · DOLFINx 0.11.0',
+    body: 'Code-generated finite elements via UFL, solved with PETSc 3.25.6. Fine mesh on 16 CPU ranks (MUMPS, job 9581) beside a single-GPU pilot on the smoke mesh: one RTX 5090 running sparse QR in FP64 (job 9694).',
+    enter() { applyRun(0,'fx-fine'); applyRun(1,'fx-gpu'); setField('stress'); setStep(29); } },
+  { section: 'explore', kicker: 'Head to head', title: 'Three solvers, one answer',
+    body: 'OpenSeesMP and FEniCSx on the fine mesh, tracked against the analytical Euler–Bernoulli limit: 191.98 kN at full plasticity (27.9× gravity). The refined 3D solids keep carrying load to 199.58 kN by 29×.',
+    enter() { applyRun(0,'os-fine'); applyRun(1,'fx-fine'); setField('stress'); setStep(29); setChart('force'); } },
+  { section: 'performance', kicker: '180 validated CPU runs', title: 'Rank scaling and I/O',
+    body: 'Wall time, solve time and field-output time across 4, 8, 16 and 32 MPI ranks, both meshes, three repeats each — plus 18 single-GPU pilots on an RTX 5090.',
+    enter() { setTimingMesh('fine'); $('timing-metric').value = 'wall_s'; renderTimings(); } },
+  { section: 'machines', kicker: 'Universidad de los Andes · Chile', title: 'The Esmeralda cluster',
+    body: 'Two AMD Ryzen 9 5950X nodes — 16 cores / 32 threads, 62.7 GiB RAM, dual-port 25 GbE RoCE — for the CPU sweep; one NVIDIA RTX 5090 (32,607 MiB VRAM) for the GPU pilots. Slurm 24.11.5, Open MPI 5, NVMe-backed NFS.',
+    enter() {} },
+];
+let chapterIndex = 0;
+
+function renderChapterShell() {
+  const strip = chapters.map((_,i) => `<button type="button" data-chapter="${i}" aria-label="Chapter ${i+1} of ${chapters.length}"></button>`).join('');
+  $('chapters').innerHTML = `
+    <div class="chapter-strip" role="tablist" aria-label="Presentation chapters">${strip}</div>
+    <div class="chapter-card">
+      <p class="eyebrow" id="chapterKicker"></p>
+      <h2 id="chapterTitle"></h2>
+      <p id="chapterBody"></p>
+      <div class="chapter-nav">
+        <button type="button" id="chapterPrev" class="quiet">‹ Previous</button>
+        <button type="button" id="chapterNext" class="quiet">Next ›</button>
+        <span id="chapterCount"></span>
+      </div>
+    </div>`;
+  $('chapters').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-chapter]');
+    if (button) goChapter(Number(button.dataset.chapter));
+  });
+  $('chapterPrev').addEventListener('click', () => goChapter(chapterIndex - 1));
+  $('chapterNext').addEventListener('click', () => goChapter(chapterIndex + 1));
+}
+
+function goChapter(index) {
+  chapterIndex = Math.min(chapters.length - 1, Math.max(0, index));
+  const chapter = chapters[chapterIndex];
+  document.body.dataset.section = chapter.section;
+  chapter.enter();
+  for (const button of $('chapters').querySelectorAll('[data-chapter]'))
+    button.setAttribute('aria-current', String(Number(button.dataset.chapter) === chapterIndex));
+  $('chapterKicker').textContent = chapter.kicker;
+  $('chapterTitle').textContent = chapter.title;
+  $('chapterBody').textContent = chapter.body;
+  $('chapterCount').textContent = `${chapterIndex + 1} / ${chapters.length}`;
+  $('chapterPrev').disabled = chapterIndex === 0;
+  $('chapterNext').disabled = chapterIndex === chapters.length - 1;
+  window.scrollTo(0, 0);
+}
+
 function initView() {
   try {
     if(!('DecompressionStream' in window))throw new Error('This browser does not support gzip asset streams');
@@ -246,18 +334,14 @@ function initView() {
 
 async function main() {
   manifest=await read('./data/manifest.json');
-  const byId = new Map(manifest.runs.map(run=>[run.id,run]));
+  byId = new Map(manifest.runs.map(run=>[run.id,run]));
   state.runs=[byId.get('os-fine'),byId.get('fx-fine')];
   slots.forEach((id,slot)=>{
     const select=$('run-'+id);
     select.replaceChildren(...manifest.runs.map(run=>new Option(
       `${run.solver} · ${meshName[run.mesh]}${run.id==='fx-gpu'?' · RTX 5090':''}`,run.id)));
     select.value=state.runs[slot].id;
-    select.addEventListener('change',()=>{
-      pause();state.runs[slot]=byId.get(select.value);state.pin=null;
-      $('element').value='';$('inspect-readout').textContent='Select a surface element in either view.';
-      setStep(state.step);
-    });
+    select.addEventListener('change',()=>applyRun(slot,select.value));
   });
   initView();
   $('field').addEventListener('change',()=>{state.field=$('field').value;renderScenes();});
@@ -283,22 +367,23 @@ async function main() {
     playStep(state.step===maxStep()?0:state.step+1);
   });
   document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
-  for(const button of document.querySelectorAll('[data-chart]'))button.addEventListener('click',()=>{
-    state.chart=button.dataset.chart;
-    for(const b of document.querySelectorAll('[data-chart]')) b.setAttribute('aria-pressed',String(b===button));
-    renderText();
-  });
-  for(const button of document.querySelectorAll('[data-mesh]'))button.addEventListener('click',()=>{
-    state.timingMesh=button.dataset.mesh;
-    for(const b of document.querySelectorAll('[data-mesh]')) b.setAttribute('aria-pressed',String(b===button));
-    renderTimings();
-  });
+  for(const button of document.querySelectorAll('[data-chart]'))button.addEventListener('click',()=>setChart(button.dataset.chart));
+  for(const button of document.querySelectorAll('[data-mesh]'))button.addEventListener('click',()=>setTimingMesh(button.dataset.mesh));
   $('timing-metric').addEventListener('change',renderTimings);
+  renderChapterShell();
   $('present').addEventListener('click',()=>{
     const active=document.body.classList.toggle('presentation');
     $('present').textContent=active?'Exit presentation':'Presentation view';
     $('present').setAttribute('aria-pressed',String(active));
-    if(active)$('explore').scrollIntoView();
+    $('chapters').hidden=!active;
+    if(active)goChapter(0);
+    else delete document.body.dataset.section;
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(!document.body.classList.contains('presentation'))return;
+    if(document.activeElement?.closest?.('.viewport'))return;
+    if(event.key==='ArrowRight'||event.key==='PageDown'){event.preventDefault();goChapter(chapterIndex+1);}
+    else if(event.key==='ArrowLeft'||event.key==='PageUp'){event.preventDefault();goChapter(chapterIndex-1);}
   });
   renderTimings();
   renderGpu();
