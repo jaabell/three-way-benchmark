@@ -1,5 +1,6 @@
 import { createView, palette, diverging, partitions } from './viewer.js';
 import { makePlot } from './plot.js';
+import { setupDeck, setupFigures } from './deck.js';
 
 const $ = (id) => document.getElementById(id);
 const labels = {
@@ -8,20 +9,35 @@ const labels = {
   elastic: ['Elastic energy density','kJ/m³'], dissipation: ['Plastic dissipation density','kJ/m³'],
   partition: ['MPI partition','rank']
 };
-const meshName = {fine:'Fine',smoke:'Smoke'};
+const meshName = {fine:'Fine',smoke:'Coarse'};
 const slots = ['a','b'];
 const state = {runs: [], field:'stress', scale:1, step:29, wire:false, ghost:true,
-  chart:'force', timingMesh:'fine', playing:false, pin:null};
+  chart:'force', curveStep:29, timingMesh:'fine', playing:false, pin:null};
 const meshCache = new Map(), frames = new Map(), parts = new Map();
 const scenes = [null,null];
 let manifest, loaded = [], revision = 0, timer = 0;
 let webgl = true;
+let startedFields = false;
 const getRun = (slot) => state.runs[slot];
 const maxStep = () => Math.min(...state.runs.map(r=>r.traces.length-1));
 const nfmt = new Intl.NumberFormat('en',{maximumFractionDigits:3});
 const fmt = (x) => nfmt.format(x);
 const reportError = (err) => { console.error(err); $('fallback').hidden=false; };
-const chart = makePlot($('plot'), $('curve-legend'), (step)=>{pause();setStep(step);});
+const chart = makePlot($('plot'), $('curve-legend'), (step)=>{state.curveStep=step;renderCurves();});
+
+function renderCurves() {
+  const filter=$('curve-mode').value;
+  const runs=filter==='selected' ? state.runs :
+    manifest.runs.filter(run=>filter==='all' || (filter==='coarse' && run.mesh==='smoke') ||
+      (filter==='fine' && run.mesh==='fine') || run.id===filter);
+  const slider=$('curve-cursor');
+  const limit=Math.max(...runs.map(run=>run.traces.at(-1)[0]));
+  state.curveStep=Math.min(state.curveStep,limit);
+  slider.max=String(limit);
+  slider.value=String(state.curveStep);
+  $('curve-load').textContent=`${state.curveStep}× gravity`;
+  chart({runs,kind:state.chart,step:state.curveStep,reference:manifest.reference,theory:manifest.theory});
+}
 
 async function read(path, binary=false) {
   const response = await fetch(new URL(path, document.baseURI));
@@ -153,8 +169,6 @@ function renderText() {
     $('meta-'+id).textContent=`Job ${run.job} · ${run.ranks} MPI · ${run.backend}`;
     $('tip-'+id).textContent=`${tip.toFixed(3)} mm tip ↓`;
   });
-  chart({runs:state.runs, kind:state.chart, step:state.step,
-    reference:manifest.reference, theory:manifest.theory});
 }
 
 async function refresh() {
@@ -215,11 +229,11 @@ function renderTimings() {
       return `<td class="time-cell"><span title="Minimal output">${t(pair[0])}</span><span title="Full output">${t(pair[1])}</span></td>`;
     }).join('')}</tr>`).join('')
   }</tbody>`;
-  $('timing-note').textContent=`Minimal output first, full output second. ${state.timingMesh==='fine'?'The fine run has 29 increments.':'The smoke run has 30 increments.'} Field time includes extraction, serialization and writes through the page cache.`;
+  $('timing-note').textContent=`Minimal output first, full output second. ${state.timingMesh==='fine'?'Fine mesh · 29 increments.':'Coarse mesh · 30 increments.'} Field time includes extraction, serialization and writes through the page cache.`;
 }
 function renderGpu() {
-  const profiles=[['smoke-elastic','Smoke elastic','cuda-qr','Sparse QR'],
-    ['smoke-nonlinear','Smoke nonlinear','cuda-qr','Sparse QR'],['fine-elastic','Fine elastic','cuda-cg','Conjugate gradients']];
+  const profiles=[['smoke-elastic','Coarse elastic','cuda-qr','Sparse QR'],
+    ['smoke-nonlinear','Coarse nonlinear','cuda-qr','Sparse QR'],['fine-elastic','Fine elastic','cuda-cg','Conjugate gradients']];
   const median=(runs) => runs.map(r=>Number(r.wall_s)).sort((a,b)=>a-b)[1].toFixed(2);
   $('gpu-timings').innerHTML=`<thead><tr><th scope="col">Case</th><th scope="col">CPU MUMPS [s]</th><th scope="col">RTX 5090 [s]</th><th scope="col">CUDA solver</th></tr></thead><tbody>${
     profiles.map(([id,title,backend,algo])=>{
@@ -259,7 +273,6 @@ async function main() {
       setStep(state.step);
     });
   });
-  initView();
   $('field').addEventListener('change',()=>{state.field=$('field').value;renderScenes();});
   $('scale').addEventListener('change',()=>{state.scale=Number($('scale').value);renderScenes();});
   for(const key of ['wire','ghost'])$(key).addEventListener('change',()=>{state[key]=$(key).checked;renderScenes();});
@@ -285,8 +298,9 @@ async function main() {
   document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
   for(const button of document.querySelectorAll('[data-chart]'))button.addEventListener('click',()=>{
     state.chart=button.dataset.chart;
+    if(state.chart==='energy' && ['all','coarse','fine'].includes($('curve-mode').value)) $('curve-mode').value='selected';
     for(const b of document.querySelectorAll('[data-chart]')) b.setAttribute('aria-pressed',String(b===button));
-    renderText();
+    renderCurves();
   });
   for(const button of document.querySelectorAll('[data-mesh]'))button.addEventListener('click',()=>{
     state.timingMesh=button.dataset.mesh;
@@ -294,15 +308,29 @@ async function main() {
     renderTimings();
   });
   $('timing-metric').addEventListener('change',renderTimings);
-  $('present').addEventListener('click',()=>{
-    const active=document.body.classList.toggle('presentation');
-    $('present').textContent=active?'Exit presentation':'Presentation view';
-    $('present').setAttribute('aria-pressed',String(active));
-    if(active)$('explore').scrollIntoView();
+  for(const run of manifest.runs) $('curve-mode').add(new Option(
+    `${run.solver} · ${meshName[run.mesh]}${run.id==='fx-gpu'?' · RTX 5090':''}`,run.id));
+  $('curve-mode').addEventListener('change',()=>{
+    if(['all','coarse','fine'].includes($('curve-mode').value) && state.chart==='energy') {
+      document.querySelector('[data-chart=force]').click();
+      return;
+    }
+    renderCurves();
   });
+  $('curve-cursor').addEventListener('input',()=>{state.curveStep=Number($('curve-cursor').value);renderCurves();});
   renderTimings();
   renderGpu();
-  await refresh();
+  const figures = setupFigures(read,meshData,manifest,byId);
+  setupDeck(slide=>{
+    pause();
+    revision++;
+    figures(slide);
+    if(slide==='fields') {
+      if(!startedFields){initView();startedFields=true;}
+      refresh();
+    }
+    if(slide==='curves') renderCurves();
+  });
 }
 main().catch(error=>{
   slots.forEach(x=>{$('status-'+x).hidden=false;$('status-'+x).textContent='Run list could not be loaded.';});

@@ -6,6 +6,8 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 process.chdir(root);
 const manifest = JSON.parse(await readFile('data/manifest.json','utf8'));
 if (manifest.runs.length !== 7 || manifest.timings.length !== 60) throw Error('Incomplete explorer data');
+const partitions = JSON.parse(await readFile('data/partitions.json','utf8'));
+if (partitions.coarse.ranks !== 4 || partitions.fine.ranks !== 16) throw Error('Incomplete MPI partitions');
 await mkdir('dist',{recursive:true});
 await cp('src/assets','dist/assets',{recursive:true});
 await cp('data','dist/data',{recursive:true});

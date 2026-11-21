@@ -59,3 +59,21 @@ for suite in ["smoke-scaling", "refinement-scaling"]:
     groups = Counter((r["solver"], r["ranks"], r["transport"], r["output"]) for r in runs)
     assert len(runs) == 90 and set(groups.values()) == {3}
 print("PASS 207 accepted field frames, clamped geometry, seven run histories, beam reference, and 180 timing runs")
+
+meta = json.loads((data / "partitions.json").read_text())
+for name, expected in [("coarse", 4), ("fine", 16)]:
+    info = meta[name]
+    assert info["ranks"] == expected
+    blob = gzip.decompress((data / f"{name}-partitions.bin.gz").read_bytes())
+    xyz_count = info["points"] * 3
+    n = info["triangles"]
+    assert len(blob) == (xyz_count + 4*n + 3*expected) * 4
+    tri = np.frombuffer(blob, "<u4", 3*n, xyz_count*4).reshape(-1, 3)
+    ranks = np.frombuffer(blob, "<u4", n, (xyz_count+3*n)*4)
+    assert tri.max() < info["points"]
+    assert set(ranks) == set(range(expected))
+    for rank in range(expected):
+        triangles = tri[ranks == rank]
+        edges = triangles[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2)
+        assert np.all(np.unique(np.sort(edges, axis=1), axis=0, return_counts=True)[1] == 2)
+print("PASS all 20 rank shells are closed, including shared interfaces")

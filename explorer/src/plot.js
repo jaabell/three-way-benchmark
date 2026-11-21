@@ -5,7 +5,7 @@ const make = (name, attrs={}, label='') => {
   if (label) el.textContent = label;
   return el;
 };
-export const curveColors = ['#a64e26','#14757d'];
+const curveColors = ['#ffd275','#74def4','#f298b0','#a9e58a','#d3b0ff','#fca262','#a8c2ff'];
 
 export function makePlot(svg, legend, onSelect) {
   let geometry, source;
@@ -28,12 +28,12 @@ export function makePlot(svg, legend, onSelect) {
     svg.replaceChildren();
     for (let i=0;i<=5;i++) {
       const x=area[0]*i/5, y=area[1]*i/5, gx=X(x), gy=Y(y);
-      svg.append(make('line',{x1:gx,x2:gx,y1:top,y2:bottom,stroke:'#e5e5dc'}),
-        make('line',{x1:left,x2:right,y1:gy,y2:gy,stroke:'#e5e5dc'}),
+      svg.append(make('line',{x1:gx,x2:gx,y1:top,y2:bottom,stroke:'#31445e'}),
+        make('line',{x1:left,x2:right,y1:gy,y2:gy,stroke:'#31445e'}),
         text(gx,bottom+18,Number(x.toFixed(1)).toString(),{'text-anchor':'middle'}),
         text(left-9,gy+4,Number(y.toFixed(1)).toString(),{'text-anchor':'end'}));
     }
-    svg.append(make('path',{d:`M ${left} ${top} V ${bottom} H ${right}`,stroke:'#727f77',fill:'none'}),
+    svg.append(make('path',{d:`M ${left} ${top} V ${bottom} H ${right}`,stroke:'#8194b0',fill:'none'}),
       text((left+right)/2,h-8,f?'Downward tip displacement [mm]':'Gravity multiplier [×g]',{'text-anchor':'middle',class:'axis-title'}),
       text(16,(top+bottom)/2,f?'Applied weight [kN]':'Energy [kJ]',{'text-anchor':'middle',transform:`rotate(-90 16 ${(top+bottom)/2})`,class:'axis-title'}));
     const specs = [];
@@ -44,13 +44,15 @@ export function makePlot(svg, legend, onSelect) {
     }
     if(f) {
       const limit=theory.plastic_force_N/1000;
-      stroke([[0,limit],[area[0],limit]],'#6a736d','Plastic limit','5 4',1.1);
-      stroke(reference,'#696c81','Euler–Bernoulli','',1.9);
+      stroke([[0,limit],[area[0],limit]],'#c2ccd9','Plastic limit','5 4',1.1);
+      stroke(reference,'#c2ccd9','Euler–Bernoulli','2 4',1.8);
     }
     geometry = [];
     runs.forEach((run,slot)=>{
       const color=curveColors[slot], letter=slot?'B':'A';
-      const series=f ? [[1,`${letter} · ${run.solver}`,slot?'4 3':'']] :
+      const name = `${run.solver} · ${run.id==='fx-gpu'?'GPU':run.mesh==='fine'?'fine':'coarse'}`;
+      const offset = (slot%3)*4;
+      const series=f ? [[1,name,slot===0?'':`${5+offset} 4`]] :
         [[4,`${letter} · work`,slot?'5 3':''],[2,`${letter} · elastic`,'1.5 3'],[3,`${letter} · plastic`,'8 3 2 3']];
       for(const [key,label,dash] of series) {
         const points = run.traces.map(t=>f?[t[key],t[0]*force]:[t[0],t[key]]);
@@ -75,10 +77,10 @@ export function makePlot(svg, legend, onSelect) {
   }
   svg.addEventListener('click',(event)=>{
     const box=svg.getBoundingClientRect();
-    const x=event.clientX-box.x,y=event.clientY-box.y;
+    const x=(event.clientX-box.x)*svg.viewBox.baseVal.width/box.width;
+    const y=(event.clientY-box.y)*svg.viewBox.baseVal.height/box.height;
     let distance=Infinity, step=0;
     for(const curve of geometry??[]) curve.forEach(([a,b],i)=>{
-      if(i>Math.min(...source.runs.map(r=>r.traces.length-1))) return;
       const d=Math.hypot(x-a,y-b);
       if(d<distance){distance=d;step=i;}
     });

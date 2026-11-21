@@ -1,6 +1,6 @@
 # Beam Benchmark Explorer
 
-A standalone scientific viewer for a YouTube demonstration and direct-link blog access. The narrative moves through the beam and comparisons, rank scaling, and Esmeralda hardware. Two linked 3D views and one load cursor use each selected run’s accepted increments. Defaults show OpenSeesMP and FEniCSx on the fine mesh at 29× gravity with true-scale deformation and shared von Mises colors.
+A standalone scientific slide deck for a YouTube demonstration and direct-link blog access. It opens with the solvers, then covers Esmeralda, geometry and gravity, coarse and fine meshes, exploded MPI domains, result fields, load curves, CPU timings, GPU workflow, GPU timings, and conclusions. Two linked field views use each selected run’s accepted increments. Defaults show OpenSeesMP and FEniCSx on the fine mesh at 29× gravity with true-scale deformation and shared von Mises colors. Domain shells include the actual inter-rank faces. Their animation translates each domain by an illustrative offset.
 
 The seven field histories come from the Esmeralda ParaView series. The timing tables come from both validated CPU campaigns and the separate GPU pilots. Manifest provenance uses public-facing Slurm job IDs. The site includes the analytical Euler–Bernoulli reference derived from the nominal steel section.
 

@@ -35,12 +35,28 @@ export function createView(host, onPick, onCamera) {
   grid.material.transparent = true;
   grid.material.opacity = .32;
   scene.add(grid);
+  const loadDiagram = new THREE.Group();
+  const support = new THREE.Mesh(
+    new THREE.BoxGeometry(.12,.85,.66),
+    new THREE.MeshLambertMaterial({color:0x526582,transparent:true,opacity:.72})
+  );
+  support.position.x = -3.06;
+  loadDiagram.add(support);
+  const loadArrows = Array.from({length:9},(_,i)=>{
+    const arrow = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0),
+      new THREE.Vector3(-2.8+.69*i,.95,0),.68,0xffcd68,.15,.105);
+    loadDiagram.add(arrow);
+    return arrow;
+  });
+  loadDiagram.visible = false;
+  scene.add(loadDiagram);
   const material = new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide});
   const wireMaterial = new THREE.MeshBasicMaterial({color:0x132321, opacity:.38, transparent:true, wireframe:true});
   const restMaterial = new THREE.LineBasicMaterial({color:0xd9e5d8, opacity:.31, transparent:true});
   const outlineMaterial = new THREE.LineBasicMaterial({color:0xffffff, depthTest:false});
   let mesh, wire, rest, outline, structure, px, py;
   let syncing = false;
+  let domains = [];
   const brush = new THREE.Color();
   const render = () => r.render(scene, camera);
   controls.addEventListener('change', () => { render(); if (!syncing) onCamera(camera, controls.target); });
@@ -136,6 +152,7 @@ export function createView(host, onPick, onCamera) {
       pos.array[i+2] = -(bases[point+1] + state.scale*u[point+1]);
       const c = data.cellAt[Math.floor(k/3)];
       if (state.field === 'partition') brush.copy(ranks[part[c] % ranks.length]);
+      else if (state.field === 'geometry') brush.set('#8eb8d5');
       else {
         const v = state.field === 'displacement' ? 1000*Math.hypot(u[point],u[point+1],u[point+2]) : frame[state.field][c];
         const index = Math.max(0, Math.min(lookup.length-1, (v-lo)/(hi-lo)*(lookup.length-1)));
@@ -151,11 +168,45 @@ export function createView(host, onPick, onCamera) {
     mesh.geometry.computeBoundingSphere();
     wire.visible = state.wire;
     rest.visible = state.ghost;
+    loadDiagram.visible = state.gravity != null;
+    if (loadDiagram.visible) {
+      const fraction = Number(state.gravity)/30;
+      for(const arrow of loadArrows) {
+        arrow.visible = fraction > 0;
+        const length = .12+.56*fraction;
+        arrow.position.y = .27+length;
+        arrow.setLength(length, Math.min(.15,length*.6), .1);
+      }
+    }
     highlight(cell);
     render();
   }
 
-  return {update,
+  function setDomains(data) {
+    const packed = Array.from({length:data.centers.length/3},()=>[]);
+    for(let n=0;n<data.ranks.length;n++) for(let j=0;j<3;j++) {
+      const offset = 3*data.tri[n*3+j];
+      packed[data.ranks[n]].push(data.xyz[offset]-3,data.xyz[offset+2],-data.xyz[offset+1]);
+    }
+    const order = packed.map((_,i)=>i).sort((a,b)=>data.centers[3*a]-data.centers[3*b]);
+    domains = packed.map((vertices,rank)=>{
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+      geometry.computeVertexNormals();
+      const model = new THREE.Mesh(geometry,new THREE.MeshLambertMaterial({color:ranks[rank]}));
+      scene.add(model);
+      const band = order.indexOf(rank) / Math.max(1,order.length-1) - .5;
+      const angle = order.indexOf(rank)*2.4;
+      return {model,offset:new THREE.Vector3(band*2.65,Math.sin(angle)*.58,Math.cos(angle)*.34)};
+    });
+    render();
+  }
+
+  return {update,setDomains,
+    spread(fraction) {
+      for(const {model,offset} of domains) model.position.copy(offset).multiplyScalar(fraction);
+      render();
+    },
     sync(other,target) {
       syncing = true;
       camera.position.copy(other.position);
@@ -167,10 +218,11 @@ export function createView(host, onPick, onCamera) {
       render();
     },
     preset(mode) {
-      const positions = {orbit:[3.9,2.6,7.5],side:[0,0,8],end:[8,0,.02]};
-      controls.target.set(mode==='end' ? 2.85 : 0,0,0);
+      const positions = {orbit:[3.9,2.6,7.5],side:[0,0,8],end:[8,0,.02],
+        detail:[-1.25,1.05,4],spread:[3.9,2.6,7.5]};
+      controls.target.set(mode==='end' ? 2.85 : mode==='detail' ? -2.3 : 0,0,0);
       camera.position.set(...positions[mode]);
-      camera.zoom = mode==='end' ? 5.5 : 1;
+      camera.zoom = mode==='end' ? 5.5 : mode==='detail' ? 4.4 : mode==='spread' ? .78 : 1;
       camera.updateProjectionMatrix();
       controls.update();
       onCamera(camera, controls.target);
