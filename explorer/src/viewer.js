@@ -71,7 +71,8 @@ export function createView(host, onPick, onCamera) {
   };
   const restMaterial = new THREE.LineBasicMaterial({color:0xd9e5d8, opacity:.31, transparent:true});
   const outlineMaterial = new THREE.LineBasicMaterial({color:0xffffff, depthTest:false});
-  let mesh, rest, outline, structure, px, py;
+  const nodeMaterial = new THREE.PointsMaterial({color:0xffdf87,size:2.6,sizeAttenuation:false,depthWrite:false});
+  let mesh, rest, nodeLayer, outline, structure, px, py;
   let syncing = false;
   let domains = [];
   const brush = new THREE.Color();
@@ -116,9 +117,10 @@ export function createView(host, onPick, onCamera) {
     if (structure === data) return;
     structure = data;
     if (mesh) {
-      scene.remove(mesh, rest, outline);
+      scene.remove(mesh, rest, nodeLayer, outline);
       mesh.geometry.dispose();
       rest.geometry.dispose();
+      nodeLayer.geometry.dispose();
       outline.geometry.dispose();
     }
     const surface = new THREE.BufferGeometry();
@@ -137,9 +139,13 @@ export function createView(host, onPick, onCamera) {
     indexed.setIndex(new THREE.BufferAttribute(data.tri, 1));
     rest = new THREE.LineSegments(new THREE.EdgesGeometry(indexed, 29), restMaterial);
     indexed.dispose();
+    const nodeGeometry = new THREE.BufferGeometry();
+    nodeGeometry.setAttribute('position',new THREE.BufferAttribute(xyz,3));
+    nodeLayer = new THREE.Points(nodeGeometry,nodeMaterial);
+    nodeLayer.visible = false;
     outline = new THREE.LineSegments(new THREE.BufferGeometry(), outlineMaterial);
     outline.renderOrder = 10;
-    scene.add(mesh, rest, outline);
+    scene.add(mesh, rest, nodeLayer, outline);
   }
 
   function highlight(selected) {
@@ -222,6 +228,9 @@ export function createView(host, onPick, onCamera) {
   }
 
   return {update,setDomains,
+    showNodes(show) {
+      if(nodeLayer){nodeLayer.visible=show;render();}
+    },
     spread(fraction) {
       for(const {model,offset} of domains) model.position.copy(offset).multiplyScalar(fraction);
       render();

@@ -1,6 +1,7 @@
 import { createView, palette, diverging, partitions } from './viewer.js';
 import { makePlot } from './plot.js';
 import { setupDeck, setupFigures } from './deck.js';
+import { setupSolverSettings } from './solver-settings.js';
 
 const $ = (id) => document.getElementById(id);
 const labels = {
@@ -344,6 +345,7 @@ async function main() {
   renderTimings();
   renderGpu();
   const figures = setupFigures(read,meshData,manifest,byId);
+  const solverSettings = setupSolverSettings(read);
   setupDeck(slide=>{
     pause();
     revision++;
@@ -353,6 +355,7 @@ async function main() {
       refresh();
     }
     if(slide==='curves') renderCurves();
+    if(slide==='solver-options') solverSettings();
   });
 }
 main().catch(error=>{

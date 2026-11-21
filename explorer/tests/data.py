@@ -77,3 +77,14 @@ for name, expected in [("coarse", 4), ("fine", 16)]:
         edges = triangles[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2)
         assert np.all(np.unique(np.sort(edges, axis=1), axis=0, return_counts=True)[1] == 2)
 print("PASS all 20 rank shells are closed, including shared interfaces")
+
+options = json.loads((data.parent / "assets" / "solver-memory.json").read_text())
+assert len(options["cpu"]) == 180 and len(options["gpu"]) == 18
+for row in options["cpu"]:
+    assert (row["hostKiB"] is not None) == (row["transport"] == "default")
+for row in options["gpu"]:
+    assert row["hostKiB"] is not None
+    sampled = row["solver"].startswith("cuda-") and row["case"] != "smoke-elastic"
+    assert (row["deviceKiB"] is not None) == sampled
+assert next(row for row in options["gpu"] if row["job"] == 9694)["deviceKiB"] == 4098*1024
+print("PASS 198 job records, rank RSS and sampled device memory")

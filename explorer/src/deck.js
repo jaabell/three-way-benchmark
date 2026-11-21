@@ -139,6 +139,17 @@ export function setupFigures(read, meshData, manifest, runs) {
   });
   $('mesh-detail').addEventListener('click',()=>states.meshes.views[0]?.preset('detail'));
   $('mesh-reset').addEventListener('click',()=>states.meshes.views[0]?.preset('orbit'));
+  const meshNodes = $('mesh-nodes');
+  const showMeshNodes = () => {
+    const show = meshNodes.getAttribute('aria-pressed') === 'true';
+    states.meshes.views.forEach(view=>view.showNodes(show));
+  };
+  meshNodes.addEventListener('click',()=>{
+    const show = meshNodes.getAttribute('aria-pressed') !== 'true';
+    meshNodes.setAttribute('aria-pressed',String(show));
+    meshNodes.textContent = show ? 'Hide surface nodes' : 'Show surface nodes';
+    showMeshNodes();
+  });
 
   async function getPartitions() {
     const metadata=await read('./data/partitions.json');
@@ -182,6 +193,7 @@ export function setupFigures(read, meshData, manifest, runs) {
           host.dataset.triangles=String(meshes[i].info.triangles);
         });
         state.views[0].preset('detail');
+        showMeshNodes();
       } else {
         state.views.forEach((view,i)=>view.setDomains(partitionData[i]));
         state.views[0].preset('spread');
