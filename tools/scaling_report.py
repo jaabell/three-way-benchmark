@@ -21,7 +21,11 @@ def summarize_suite(suite, report, through_factor):
         result = subprocess.run([sys.executable, str(Path(__file__).with_name("summarize.py")),
                                  str(suite), "--through-factor", str(through_factor)],
                                 stdout=summary, stderr=log)
-    expected = len(csv_rows(suite / "submissions.tsv", "\t"))
+    submitted = csv_rows(suite / "submissions.tsv", "\t")
+    expected = len(submitted)
+    scopes = {(row["ranks"], row["transport"]) for row in submitted}
+    hosts = {row.get("host") for row in submitted}
+    host_note = f" on {next(iter(hosts))}" if len(hosts) == 1 and None not in hosts else ""
     measurements = csv_rows(suite / "measurements.csv")
     if result.returncode and result.returncode != 1:
         result.check_returncode()
@@ -29,10 +33,12 @@ def summarize_suite(suite, report, through_factor):
               for row in csv_rows(suite / "summary.csv")}
     labels = [f"{name} {output}" for name in SOLVERS.values() for output in ("minimal", "full")]
     report.extend([f"## {suite.name.replace('-scaling', '').capitalize()}", "",
-                   f"{len(measurements)}/{expected} runs validated.", "",
+                   f"{len(measurements)}/{expected} runs validated{host_note}.", "",
                    "| MPI ranks | Network | " + " | ".join(labels) + " |",
                    "| ---: | --- |" + " ---: |" * len(labels)])
     for ranks, transport in RANKS:
+        if (ranks, transport) not in scopes:
+            continue
         times = []
         for solver in SOLVERS:
             for output in ("minimal", "full"):

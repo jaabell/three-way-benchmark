@@ -49,6 +49,12 @@ All 18 fine-mesh OpenSeesMP runs at 4, 8, and 16 ranks used the same mesh hash a
 
 These host-specific results show shorter wall times at higher ranks in the runs observed. The limited and uneven repeats leave the size of the same-host speedup uncertain. Job IDs appear in the [individual measurements](refinement-scaling-measurements.csv). Each job directory on Esmeralda contains its node in `nodelist` and its rank bindings in `binding.tsv`.
 
+### Balanced node13 comparison
+
+The follow-up replaces the 55 single-node repeats originally run on node12 with 28 coarse and 27 fine runs pinned to node13. It retains the 53 validated original node13 runs. The resulting comparison has 54 runs per mesh, three per solver, rank count, and output mode at 4, 8, and 16 ranks. All replacement jobs use the archived solver inputs and the original installed solver releases.
+
+On Esmeralda, `runs/node13-scaling/replacements.tsv` maps the original job IDs to 9760–9814. Job 9816 writes the coarse comparison to `runs/node13-scaling/coarse.md`. Job 9815 writes both meshes to `runs/node13-scaling/benchmark.md` after the reruns. The tables above describe the original campaign, including the 32-rank transport cases. [Submission script](../../cluster/replay_node13.py)
+
 All paths below are relative to `/mnt/covadongaflash/users/jaabell/three-way-benchmark`. The tables give median launcher wall time in seconds by solver, rank count, network and output mode. Each cell includes the number of validated repeats. The CSVs also report solve time, field-output time, field bytes, iterations and final tip displacement. Raw results, solver logs, node inventory and rank binding are kept in each case directory.
 
 | File | Contents |

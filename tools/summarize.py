@@ -17,6 +17,8 @@ def csv_rows(path, delimiter=","):
 def run_metrics(path, case, through_factor=None):
     if not (path / "launcher-complete").is_file():
         raise ValueError("launcher incomplete")
+    if case.get("host") and (path / "nodelist").read_text().strip() != case["host"]:
+        raise ValueError("run host differs from the comparison manifest")
     ranks = int(case["ranks"])
     solver, nranks, transport, output, target, nsteps, job = (path / "case.tsv").read_text().strip().split("\t")
     if (solver, nranks, transport, output, job) != tuple(
