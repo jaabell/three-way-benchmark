@@ -13,6 +13,7 @@ const manifest=JSON.parse(await readFile(new URL('../data/manifest.json',import.
 const errs=[];
 function monitor(page){
   page.on('pageerror',e=>errs.push(String(e)));
+  page.on('console',message=>{if(message.type()==='error' && /WebGLProgram|Shader Error/.test(message.text())) errs.push(message.text());});
   page.on('response',r=>{if(r.status()>=400)errs.push(`${r.status()} ${r.url()}`);});
 }
 try {
@@ -47,6 +48,8 @@ try {
   await capture('slides-03-load');
   await go('meshes');
   await page.waitForSelector('#mesh-fine[data-ready="true"]');
+  const fineTriangles=await page.getAttribute('#mesh-fine','data-triangles');
+  const coarseTriangles=await page.getAttribute('#mesh-coarse','data-triangles');
   await page.click('#mesh-detail');
   await capture('slides-04-mesh');
   await go('partitions');
@@ -63,10 +66,21 @@ try {
   await page.waitForSelector('#view-b[data-load="29"][data-run="fx-fine"]');
   assert.match(await page.locator('#tip-a').innerText(),/78\.839/);
   assert.match(await page.locator('#load-readout').innerText(),/199\.58/);
+  assert(await page.isChecked('#wire'));
+  assert.equal(await page.getAttribute('#view-a','data-triangles'),fineTriangles);
+  assert.match(await page.locator('#meta-a').innerText(),/69,600 T10/);
   assert.equal(await page.locator('meta[name=robots]').getAttribute('content'),'noindex, nofollow, noarchive');
   await capture('slides-06-fields');
 
-  for(const key of ['displacement','strain','plastic','elastic','dissipation','partition','stress']){
+  await page.selectOption('#run-a','os-smoke');
+  await page.waitForSelector('#view-a[data-run="os-smoke"]');
+  assert.equal(await page.getAttribute('#view-a','data-triangles'),coarseTriangles);
+  await page.click('#camera-detail');
+  await capture('field-mesh-closeup');
+  await page.click('#camera-orbit');
+  await page.selectOption('#run-a','os-fine');
+  await page.waitForSelector('#view-a[data-run="os-fine"]');
+  for(const key of ['displacement','strain','plastic','elastic','dissipation','partition','geometry','stress']){
     await page.selectOption('#field',key);
     await page.waitForSelector(`#view-a[data-field="${key}"]`);
     await page.waitForSelector(`#view-b[data-field="${key}"]`);

@@ -177,8 +177,11 @@ export function setupFigures(read, meshData, manifest, runs) {
       } else if (slide==='meshes'){
         state.views.forEach((view,i)=>{
           view.update(meshes[i],meshes[i].rest,null,{field:'geometry',wire:true,ghost:false,scale:0},[0,1],null);
-          $(state.hosts[i]).dataset.ready='true';
+          const host=$(state.hosts[i]);
+          host.dataset.ready='true';
+          host.dataset.triangles=String(meshes[i].info.triangles);
         });
+        state.views[0].preset('detail');
       } else {
         state.views.forEach((view,i)=>view.setDomains(partitionData[i]));
         state.views[0].preset('spread');

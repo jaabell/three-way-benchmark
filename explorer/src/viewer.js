@@ -51,10 +51,27 @@ export function createView(host, onPick, onCamera) {
   loadDiagram.visible = false;
   scene.add(loadDiagram);
   const material = new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide});
-  const wireMaterial = new THREE.MeshBasicMaterial({color:0x132321, opacity:.38, transparent:true, wireframe:true});
+  const edges = {value:0};
+  // Shade each edge once and fade it when the triangle becomes too small to resolve.
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.meshEdges = edges;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 barycentric; varying vec3 vBarycentric;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBarycentric = barycentric;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBarycentric; uniform float meshEdges;')
+      .replace('#include <opaque_fragment>', `
+        vec3 pixel = max(fwidth(vBarycentric), vec3(1e-6));
+        vec3 coverage = smoothstep(vec3(0.0), pixel * 0.82, vBarycentric);
+        float resolved = smoothstep(1.0, 3.3, 1.0 / max(pixel.x, max(pixel.y, pixel.z)));
+        float edge = (1.0 - min(coverage.x, min(coverage.y, coverage.z))) * resolved;
+        outgoingLight = mix(outgoingLight, outgoingLight * 0.22 + vec3(0.008), edge * meshEdges);
+        #include <opaque_fragment>
+      `);
+  };
   const restMaterial = new THREE.LineBasicMaterial({color:0xd9e5d8, opacity:.31, transparent:true});
   const outlineMaterial = new THREE.LineBasicMaterial({color:0xffffff, depthTest:false});
-  let mesh, wire, rest, outline, structure, px, py;
+  let mesh, rest, outline, structure, px, py;
   let syncing = false;
   let domains = [];
   const brush = new THREE.Color();
@@ -99,7 +116,7 @@ export function createView(host, onPick, onCamera) {
     if (structure === data) return;
     structure = data;
     if (mesh) {
-      scene.remove(mesh, wire, rest, outline);
+      scene.remove(mesh, rest, outline);
       mesh.geometry.dispose();
       rest.geometry.dispose();
       outline.geometry.dispose();
@@ -107,8 +124,10 @@ export function createView(host, onPick, onCamera) {
     const surface = new THREE.BufferGeometry();
     for (const name of ['position','color']) surface.setAttribute(name,
       new THREE.BufferAttribute(new Float32Array(data.tri.length * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    const barycentric = new Float32Array(data.tri.length*3);
+    for(let i=0;i<data.tri.length;i++) barycentric[3*i+i%3]=1;
+    surface.setAttribute('barycentric',new THREE.BufferAttribute(barycentric,3));
     mesh = new THREE.Mesh(surface, material);
-    wire = new THREE.Mesh(surface, wireMaterial);
     const indexed = new THREE.BufferGeometry();
     const xyz = new Float32Array(data.xyz.length);
     for (let i = 0; i < xyz.length; i += 3) {
@@ -120,7 +139,7 @@ export function createView(host, onPick, onCamera) {
     indexed.dispose();
     outline = new THREE.LineSegments(new THREE.BufferGeometry(), outlineMaterial);
     outline.renderOrder = 10;
-    scene.add(mesh, wire, rest, outline);
+    scene.add(mesh, rest, outline);
   }
 
   function highlight(selected) {
@@ -166,7 +185,7 @@ export function createView(host, onPick, onCamera) {
     rgb.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     mesh.geometry.computeBoundingSphere();
-    wire.visible = state.wire;
+    edges.value = state.wire ? .68 : 0;
     rest.visible = state.ghost;
     loadDiagram.visible = state.gravity != null;
     if (loadDiagram.visible) {

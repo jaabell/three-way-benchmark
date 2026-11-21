@@ -11,7 +11,7 @@ const labels = {
 };
 const meshName = {fine:'Fine',smoke:'Coarse'};
 const slots = ['a','b'];
-const state = {runs: [], field:'stress', scale:1, step:29, wire:false, ghost:true,
+const state = {runs: [], field:'stress', scale:1, step:29, wire:true, ghost:true,
   chart:'force', curveStep:29, timingMesh:'fine', playing:false, pin:null};
 const meshCache = new Map(), frames = new Map(), parts = new Map();
 const scenes = [null,null];
@@ -96,6 +96,7 @@ function partitionData(run) {
 }
 
 function domain() {
+  if(state.field==='geometry')return [0,1];
   if(state.field==='partition')return [0,Math.max(...state.runs.map(r=>r.ranks))-1];
   if(state.field==='stress')return [0,250];
   const extents=manifest.runs.map(r=>r.levels[state.field]);
@@ -106,8 +107,15 @@ function domain() {
 }
 
 function drawLegend(range) {
-  const [title,unit]=labels[state.field];
   const bar=$('colorbar'), categorical=state.field==='partition';
+  const meshOnly=state.field==='geometry';
+  bar.hidden=meshOnly;
+  $('legend-ticks').hidden=meshOnly;
+  if(meshOnly) {
+    $('legend-title').textContent='T10 surface mesh';
+    return;
+  }
+  const [title,unit]=labels[state.field];
   $('legend-title').textContent=categorical ? 'MPI rank ownership · zero-based' :
     `${title} [${unit}] · ${state.field==='stress'?'nominal yield at 250 MPa':'shared scale'}`;
   const colors=categorical ? partitions.slice(0,range[1]+1) : (state.field==='strain'?diverging:palette);
@@ -132,6 +140,11 @@ function showPin() {
   const next=state.pin && loaded[state.pin.slot];
   if(!next || next.run.id!==state.pin.run) return;
   const {geometry,frame,part,run}=next, cell=state.pin.cell;
+  const display=`${run.solver} · element ${geometry.ids[cell]} · MPI rank ${part[cell]}`;
+  if(state.field==='geometry') {
+    $('inspect-readout').textContent=display;
+    return;
+  }
   let value;
   if(state.field==='displacement') {
     const points=new Set();
@@ -140,7 +153,7 @@ function showPin() {
     });
     value=1000*[...points].reduce((sum,i)=>sum+Math.hypot(...frame.u.subarray(3*i,3*i+3)),0)/points.size;
   } else value=state.field==='partition' ? part[cell] : frame[state.field][cell];
-  $('inspect-readout').textContent=`${run.solver} · element ${geometry.ids[cell]} · MPI rank ${part[cell]} · ${labels[state.field][0]} ${fmt(value)} ${labels[state.field][1]}${state.field==='displacement'?' (surface-node mean)':''}`;
+  $('inspect-readout').textContent=`${display} · ${labels[state.field][0]} ${fmt(value)} ${labels[state.field][1]}${state.field==='displacement'?' (surface-node mean)':''}`;
 }
 
 function renderScenes() {
@@ -149,11 +162,13 @@ function renderScenes() {
   loaded.forEach((data,slot)=>{
     if(data.run.id!==getRun(slot).id || data.step!==state.step)return;
     const cell=state.pin?.slot===slot && state.pin.run===data.run.id ? state.pin.cell : null;
-    scenes[slot]?.update(data.geometry,data.frame,data.part,state,range,cell);
+    const settings=state.field==='geometry'?{...state,wire:true}:state;
+    scenes[slot]?.update(data.geometry,data.frame,data.part,settings,range,cell);
     const viewport=$('view-'+slots[slot]);
     viewport.dataset.run=data.run.id;
     viewport.dataset.load=String(data.step);
     viewport.dataset.field=state.field;
+    viewport.dataset.triangles=String(data.geometry.info.triangles);
   });
   showPin();
 }
@@ -166,7 +181,9 @@ function renderText() {
   $('load-readout').textContent=`${state.step}× gravity · ${load.toFixed(2)} kN`;
   slots.forEach((id,slot)=>{
     const run=getRun(slot), tip=run.traces[state.step][1];
-    $('meta-'+id).textContent=`Job ${run.job} · ${run.ranks} MPI · ${run.backend}`;
+    const count=fmt(manifest.meshes[run.mesh].elements);
+    $('meta-'+id).textContent=`${count} T10 · ${run.ranks} MPI · Job ${run.job}`;
+    $('meta-'+id).title=run.backend;
     $('tip-'+id).textContent=`${tip.toFixed(3)} mm tip ↓`;
   });
 }
@@ -249,11 +266,12 @@ function initView() {
       scenes[slot]=createView($('view-'+id),cell=>inspect(slot,cell),
         (cam,target)=>scenes[1-slot]?.sync(cam,target));
     });
+    scenes[0].preset('detail');
   } catch {
     webgl=false;
     $('fallback').hidden=false;
     slots.forEach(id=>{$('status-'+id).textContent='3D unavailable in this browser';});
-    for (const id of ['field','scale','wire','ghost','camera-orbit','camera-side','camera-end','inspect-run','element']) $(id).disabled=true;
+    for (const id of ['field','scale','wire','ghost','camera-orbit','camera-side','camera-end','camera-detail','inspect-run','element']) $(id).disabled=true;
     $('inspect').querySelector('button').disabled=true;
   }
 }
@@ -273,10 +291,15 @@ async function main() {
       setStep(state.step);
     });
   });
-  $('field').addEventListener('change',()=>{state.field=$('field').value;renderScenes();});
+  $('field').addEventListener('change',()=>{
+    state.field=$('field').value;
+    $('wire').disabled=state.field==='geometry';
+    $('wire').checked=state.field==='geometry'||state.wire;
+    renderScenes();
+  });
   $('scale').addEventListener('change',()=>{state.scale=Number($('scale').value);renderScenes();});
   for(const key of ['wire','ghost'])$(key).addEventListener('change',()=>{state[key]=$(key).checked;renderScenes();});
-  for(const mode of ['orbit','side','end'])$('camera-'+mode).addEventListener('click',()=>scenes[0]?.preset(mode));
+  for(const mode of ['orbit','side','end','detail'])$('camera-'+mode).addEventListener('click',()=>scenes[0]?.preset(mode));
   $('inspect').addEventListener('submit',event=>{
     event.preventDefault();
     const slot=Number($('inspect-run').value);
