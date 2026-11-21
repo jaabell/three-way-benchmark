@@ -36,6 +36,17 @@ At 32 ranks with full output on the fine mesh, RoCE reduced median wall time ver
 
 [Smoke medians](smoke-scaling-summary.csv) · [Smoke individual runs](smoke-scaling-measurements.csv) · [Fine medians](refinement-scaling-summary.csv) · [Fine individual runs](refinement-scaling-measurements.csv)
 
+### OpenSeesMP single-node audit
+
+All 18 fine-mesh OpenSeesMP runs at 4, 8, and 16 ranks used the same mesh hash and executable build. The inputs selected ParallelRCM and MUMPS, and the saved bindings mapped the requested ranks to distinct physical cores. Each run accepted 29 increments and accumulated 53 Newton iterations. The pooled medians combine runs from both hosts, with an uneven mix across rank counts.
+
+| Fine mesh, minimal output | 4 ranks | 8 ranks | 16 ranks |
+| --- | ---: | ---: | ---: |
+| node12, median wall time and sample count | 229.52 s (1) | 211.10 s (2) | 202.48 s (2) |
+| node13, median wall time and sample count | 206.83 s (2) | 168.46 s (1) | 158.78 s (1) |
+
+These host-specific results show shorter wall times at higher ranks in the runs observed. The limited and uneven repeats leave the size of the same-host speedup uncertain. Job IDs appear in the [individual measurements](refinement-scaling-measurements.csv). Each job directory on Esmeralda contains its node in `nodelist` and its rank bindings in `binding.tsv`.
+
 All paths below are relative to `/mnt/covadongaflash/users/jaabell/three-way-benchmark`. The tables give median launcher wall time in seconds by solver, rank count, network and output mode. Each cell includes the number of validated repeats. The CSVs also report solve time, field-output time, field bytes, iterations and final tip displacement. Raw results, solver logs, node inventory and rank binding are kept in each case directory.
 
 | File | Contents |

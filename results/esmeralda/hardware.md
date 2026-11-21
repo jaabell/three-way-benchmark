@@ -14,7 +14,7 @@ The GPU pilots run on `gpu01`, with a Ryzen 9 9950X (16 cores, 32 threads), 60,0
 
 | Solver | Installed pilot build |
 | --- | --- |
-| OpenSeesMP | ladruño, 3.8.0, commit `dfdf974251e05e30c8d0f338b0ea0de7fdd8cef4`, Open MPI 5, MUMPS |
+| OpenSeesMP | Ladruño 3.8.0, Open MPI 5, MUMPS. The 60 CPU scaling jobs logged commit `1f08e5934bc90cf2696cc09b42b6762f53c77b43`. The earlier nonlinear smoke pilot logged `dfdf974251e05e30c8d0f338b0ea0de7fdd8cef4`. |
 | FEniCSx | DOLFINx and Basix 0.11.0, PETSc 3.25.6 with MUMPS, Open MPI 5.0.11 in the site's conda environment |
 | Kratos | Kratos 10.3.0, Trilinos 14.4.0, METIS, Open MPI 5. The 2026-11-20 release adds Amesos MUMPS 5.9.0 and Amesos and Amesos2 SuperLU_DIST 7.2.0. Earlier pilot records used the 2026-11-19 release with serial KLU. |
 
