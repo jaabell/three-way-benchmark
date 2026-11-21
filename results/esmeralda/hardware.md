@@ -10,6 +10,8 @@ Inventory captured through Slurm on 2026-11-19, plus a separate inventory of the
 
 The compute nodes run Debian 13 and Slurm 24.11.5. The login host runs Ubuntu 22.04.1. The snapshot of the shared store shows 11 TiB total and 8.9 TiB free. Full CPU maps, PCI and device listings, storage mounts, RoCE link state and scheduler descriptions are in the workspace under `inventory/esmeralda/`. Jobs retain their own allocation, binding and inventory reports.
 
+After the CPU sweeps, a memory misconfiguration was identified as the cause of the slowdown on node12. The RAM figures above show the capacity reported during the runs. [Timing interpretation and host breakdown](scaling.md#openseesmp-single-node-audit)
+
 The GPU pilots run on `gpu01`, with a Ryzen 9 9950X (16 cores, 32 threads), 60,000 MiB schedulable RAM, and a GeForce RTX 5090 reporting 32,607 MiB VRAM and compute capability 12.0. The host has a Kingston KC3000 NVMe drive and two active Mellanox ConnectX-4 Lx RoCE ports. Slurm inventory job 9684 records NVIDIA driver 615.71.09. [GPU configurations and measurements](gpu-pilot.md)
 
 | Solver | Installed pilot build |

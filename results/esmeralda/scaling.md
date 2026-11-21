@@ -11,6 +11,8 @@ The two sweeps use the same 6 m steel cantilever, small-strain J2 perfect plasti
 
 All 180 runs validated. Three 16-rank nonlinear full-output checks at 29× gravity (9579–9581) qualified the fine sweep. The first 29 load increments match across the two meshes. For a like-for-like mesh comparison, the CSVs include solve and output times summed over those 29 steps. The smoke wall times also include the difficult 30th increment.
 
+Post-run investigation identified a memory misconfiguration on node12 that slowed that host. The single-node repeats were unevenly distributed across node12 and node13, and every 32-rank run used both hosts. The tables record performance under the hardware configurations in place during the campaign.
+
 ## Force–displacement
 
 ![Measured cantilever load versus downward tip displacement with an ideal plastic beam reference and a close-up near its limit](force-displacement.png)
