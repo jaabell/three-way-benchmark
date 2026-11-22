@@ -1,7 +1,6 @@
 """Reduce real ParaView T10 load histories to browser-ready exterior fields."""
 
 import argparse
-import csv
 import gzip
 import json
 import shutil
@@ -11,6 +10,8 @@ from xml.etree import ElementTree as ET
 import numpy as np
 from vtkmodules.util.numpy_support import vtk_to_numpy
 from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridReader
+
+from timing_assets import SOURCES, export_cpu, rows
 
 
 RUNS = [
@@ -82,11 +83,6 @@ def exterior(grid):
     return xyz, tets, points, cell_ids, triangles.ravel(), tri_cells
 
 
-def rows(path):
-    with path.open(newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("repo", type=Path)
@@ -102,16 +98,12 @@ def main():
                 "reference": [[float(r["tip_down_mm"]), float(r["total_weight_kN"])]
                               for r in rows(reports / "force-displacement.csv")
                               if r["curve"].startswith("Euler")]}
-    run_timing = []
-    for tag, suite in (("smoke", "smoke-scaling"), ("fine", "refinement-scaling")):
-        table = rows(reports / f"{suite}-summary.csv")
-        assert len(table) == 30 and all(r["valid_repeats"] == "3" for r in table)
-        run_timing.extend(dict(row, mesh=tag) for row in table)
+    for _, _, suite in SOURCES:
         for suffix in ("measurements", "summary"):
             name = f"{suite}-{suffix}.csv"
             shutil.copyfile(reports / name, out / name)
     shutil.copyfile(reports / "gpu-pilot-timings.csv", out / "gpu-pilot-timings.csv")
-    manifest["timings"] = run_timing
+    manifest["timings"] = export_cpu(reports, out)
     manifest["gpu"] = rows(reports / "gpu-pilot-timings.csv")
     meshes = {}
     reader = vtkXMLUnstructuredGridReader()

@@ -64,7 +64,7 @@ The original CPU runs included a slower memory configuration on node12, identifi
 
 The balanced follow-up validated 108 single-node timings on node13. On the fine mesh, OpenSeesMP and FEniCSx improved through 16 ranks. Among Kratos's own 4-, 8-, and 16-rank runs on node13, the lowest fine-mesh median came at 8 ranks. FEniCSx had the lowest wall time among the three solvers at every tested rank on node13. On the coarse mesh, each solver recorded its own lowest median at 8 ranks. [Node13 timings](results/esmeralda/node13-timings.md) · [Archive index](results/esmeralda/archive.md)
 
-The smoke and fine sweeps validated all 180 runs. The final tables cover 4, 8, 16 and 32 MPI ranks, both field-output modes, and the 32-rank RoCE and TCP comparisons. [Final rank-by-rank timings](results/esmeralda/scaling-timings.md) · [RTX 5090 pilots](results/esmeralda/gpu-pilot.md)
+The explorer timing table combines the 108 node13-only results with 72 original 32-rank results on nodes 12 and 13. Both meshes include minimal and full field output and the 32-rank RoCE and TCP comparison. [Explorer timing table](https://joseabell.com/apps/beam-benchmark-e25983d5a2ab5975/#performance) · [Original timing tables](results/esmeralda/scaling-timings.md) · [RTX 5090 pilots](results/esmeralda/gpu-pilot.md)
 
 ![Stacked wall time split into solve, field output, and other wall time, with an enlarged output-time panel](results/report/pilot-timings.png)
 

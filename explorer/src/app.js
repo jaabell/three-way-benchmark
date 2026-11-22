@@ -269,18 +269,22 @@ async function playStep(step) {
 function renderTimings() {
   const selected=$('timing-metric').value;
   const available=manifest.timings.filter(r=>r.mesh===state.timingMesh);
-  const rows=[['4','default','Single node'],['8','default','Single node'],['16','default','Single node'],
+  const rows=[['4','default'],['8','default'],['16','default'],
     ['32','rdma-on','RoCE'],['32','rdma-off','TCP']];
   const solvers=['opensees','kratos','fenicsx'];
   const table=$('timings');
   const t=(r)=> selected==='bytes' ? (Number(r.median_bytes)/1e6).toFixed(2) : Number(r['median_'+selected]).toFixed(2);
-  table.innerHTML=`<thead><tr><th scope="col">MPI ranks</th><th scope="col">Interconnect</th><th scope="col">OpenSeesMP</th><th scope="col">Kratos MUMPS</th><th scope="col">FEniCSx</th></tr></thead><tbody>${
-    rows.map(([rank,mode,label])=>`<tr><th scope="row">${rank}</th><td>${label}</td>${solvers.map(solver=>{
-      const pair=['minimal','full'].map(output=>available.find(r=>r.solver===solver&&r.ranks===rank&&r.transport===mode&&r.output===output));
-      return `<td class="time-cell"><span title="Minimal output">${t(pair[0])}</span><span title="Full output">${t(pair[1])}</span></td>`;
-    }).join('')}</tr>`).join('')
+  table.innerHTML=`<thead><tr><th scope="col">MPI ranks</th><th scope="col">Host / transport</th><th scope="col">OpenSeesMP</th><th scope="col">Kratos MUMPS</th><th scope="col">FEniCSx</th></tr></thead><tbody>${
+    rows.map(([rank,mode,network])=>{
+      const group=available.filter(r=>r.ranks===rank && r.transport===mode);
+      const placement=group[0].hosts+(network ? ` · ${network}` : '');
+      return `<tr><th scope="row">${rank}</th><td>${placement}</td>${solvers.map(solver=>{
+        const pair=['minimal','full'].map(output=>group.find(r=>r.solver===solver && r.output===output));
+        return `<td class="time-cell"><span title="Minimal output">${t(pair[0])}</span><span title="Full output">${t(pair[1])}</span></td>`;
+      }).join('')}</tr>`;
+    }).join('')
   }</tbody>`;
-  $('timing-note').textContent=`Minimal output first, full output second. ${state.timingMesh==='fine'?'Fine mesh · 29 increments.':'Coarse mesh · 30 increments.'} Field time includes extraction, serialization and writes through the page cache.`;
+  $('timing-note').textContent=`${state.timingMesh==='fine'?'Fine mesh · 29 increments.':'Coarse mesh · 30 increments.'} The 32-rank rows come from the original campaign, when node12 had a memory misconfiguration. Field time includes extraction, serialization and writes through the page cache.`;
 }
 function renderGpu() {
   const profiles=[['smoke-elastic','Coarse elastic','cuda-qr','Sparse QR'],
@@ -311,7 +315,7 @@ function initView() {
 }
 
 async function main() {
-  manifest=await read('./data/manifest.json');
+  manifest=await read('./data/manifest.json?v=node13');
   const byId = new Map(manifest.runs.map(run=>[run.id,run]));
   state.runs=[byId.get('os-fine'),byId.get('fx-fine')];
   slots.forEach((id,slot)=>{

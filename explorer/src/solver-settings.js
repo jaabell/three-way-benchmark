@@ -82,6 +82,7 @@ export function setupSolverSettings(read) {
     const body=document.createElement('tbody');
     const mesh=$('settings-mesh').value;
     const [ranks,transport]=$('settings-ranks').value.split(':');
+    const host=transport==='default'?'node13':'node12 + node13';
     const output=$('settings-output').value;
     const profile=$('settings-profile').value;
     const repeat=$('settings-repeat').value;
@@ -104,7 +105,7 @@ export function setupSolverSettings(read) {
     table.replaceChildren(head,body);
     $('settings-case').textContent=gpu
       ? `${fine?'350,343 rows · 26,472,609 stored entries · 2 elastic steps · Minimal output':'39,123 rows · 2,819,799 stored entries · '+(profile==='smoke-elastic'?'2 elastic steps':'30 nonlinear steps')+' · Full output'} · One MPI rank`
-      : `${mesh==='fine'?'Fine · 29':'Coarse · 30'} gravity increments · Newton residual target 0.1 N · 18 iteration cap · One thread per rank`;
+      : `${host} · ${mesh==='fine'?'Fine · 29':'Coarse · 30'} gravity increments · Newton residual target 0.1 N · 18 iteration cap · One thread per rank`;
     const usesFullOutput = gpu ? !fine : output==='full';
     $('settings-case').title = usesFullOutput
       ? 'Full output writes displacements and integration-point stresses and strains after each increment.'
@@ -125,7 +126,7 @@ export function setupSolverSettings(read) {
     $(id).addEventListener('change',render);
   return async () => {
     try {
-      request??=read('./assets/solver-memory.json').catch(error=>{request=null;throw error;});
+      request??=read('./assets/solver-memory.json?v=node13').catch(error=>{request=null;throw error;});
       data=await request;
       render();
     } catch {

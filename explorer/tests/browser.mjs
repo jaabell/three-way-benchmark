@@ -83,6 +83,7 @@ try {
   await go('fields');
   await page.waitForSelector('#view-a[data-load="29"][data-run="os-fine"]');
   await page.waitForSelector('#view-b[data-load="29"][data-run="fx-fine"]');
+  assert.match(await page.locator('#field-axes').innerText(),/\+Z up · \+Y right in End view/);
   assert.match(await page.locator('#tip-a').innerText(),/78\.839/);
   assert.match(await page.locator('#load-readout').innerText(),/199\.58/);
   assert(await page.isChecked('#wire'));
@@ -185,9 +186,11 @@ try {
   await page.waitForSelector('#settings-table tbody tr:nth-child(3)');
   assert.match(await page.locator('#settings-table').innerText(),/0\.66 GiB/);
   assert.match(await page.locator('#settings-table').innerText(),/MPIAIJ/);
+  assert.match(await page.locator('#settings-case').innerText(),/^node13/);
   await capture('slides-08-solver-options');
   await page.selectOption('#settings-repeat','1');
-  assert.match(await page.locator('#settings-table').innerText(),/Job \d+/);
+  assert.deepEqual(await page.locator('#settings-table tbody small').allTextContents(),
+    ['Job 9801','Job 9793','Job 9805']);
   await page.selectOption('#settings-ranks','32:rdma-on');
   assert.match(await page.locator('#settings-table').innerText(),/Launcher only/);
   await page.click('[data-settings-mode=gpu]');
@@ -200,10 +203,19 @@ try {
   assert.match(await page.locator('#settings-table').innerText(),/Unrecorded/);
   await go('performance');
   assert.equal(await page.locator('#timings tbody tr').count(),5);
+  assert.equal(await page.locator('#timings tbody tr:nth-child(3) td').first().textContent(),'node13');
+  assert.match(await page.locator('#timings tbody tr:nth-child(3)').innerText(),/165\.10.*174\.72/s);
+  assert.match(await page.locator('#timings tbody tr:nth-child(4)').innerText(),/node12 \+ node13 · RoCE/);
+  assert.match(await page.locator('#timing-note').innerText(),/node12 had a memory misconfiguration/);
+  for(const link of ['node13-fine','node13-coarse','two-node']){
+    const href=await page.locator(`#performance a[href$="${link}-measurements.csv"]`).getAttribute('href');
+    assert((await page.request.get(new URL(href,target).href)).ok());
+  }
   assert.match(await page.locator('#timings').innerText(),/111\.45/);
   await capture('slides-09-cpu');
   await page.click('[data-mesh=smoke]');
   assert.match(await page.locator('#timings').innerText(),/12\.53/);
+  assert.match(await page.locator('#timings tbody tr:nth-child(2)').innerText(),/11\.19.*13\.03/s);
   await page.selectOption('#timing-metric','bytes');
   assert.match(await page.locator('#timings').innerText(),/105\./);
   await go('gpu');
@@ -215,6 +227,7 @@ try {
   await capture('slides-11-gpu');
   await go('conclusions');
   assert.match(await page.locator('#conclusions').innerText(),/191\.98/);
+  assert.match(await page.locator('#conclusions').innerText(),/Kratos had its lowest median at 8 ranks/);
   await capture('slides-12-conclusions');
   assert.equal(new URL(page.url()).hash,'#conclusions');
   await page.goBack();

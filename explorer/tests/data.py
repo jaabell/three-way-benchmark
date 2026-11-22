@@ -5,6 +5,7 @@ import gzip
 import json
 from collections import Counter
 from pathlib import Path
+from statistics import median
 
 import numpy as np
 
@@ -85,6 +86,45 @@ for suite in ["smoke-scaling", "refinement-scaling"]:
     assert len(runs) == 90 and set(groups.values()) == {3}
 print("PASS 207 accepted frames with 12 signed tensor components, clamped geometry, seven run histories, beam reference, and 180 timing runs")
 
+reports = data.parents[2] / "results/esmeralda"
+active_runs = {}
+groups = {}
+for source, count, hosts in [
+    ("node13-coarse", 54, "node13"), ("node13-fine", 54, "node13"), ("two-node", 72, "node12 + node13")
+]:
+    with (data / f"{source}-measurements.csv").open() as stream:
+        samples = list(csv.DictReader(stream))
+    assert len(samples) == count
+    for row in samples:
+        assert row["hosts"] == hosts
+        assert row["job"] not in active_runs
+        assert (row["ranks"] == "32") == (source == "two-node")
+        active_runs[row["job"]] = row
+        setting = tuple(row[k] for k in ("mesh", "solver", "ranks", "transport", "output"))
+        groups.setdefault(setting, []).append(row)
+    if source != "two-node":
+        with (reports / f"{source}-measurements.csv").open() as stream:
+            archived = {row["job"]: row for row in csv.DictReader(stream)}
+    else:
+        archived = {}
+        for suite in ("smoke-scaling", "refinement-scaling"):
+            with (reports / f"{suite}-measurements.csv").open() as stream:
+                archived.update((row["job"], row) for row in csv.DictReader(stream) if row["ranks"] == "32")
+    assert {row["job"]: {key: value for key, value in row.items() if key not in ("mesh", "hosts")}
+            for row in samples} == archived
+assert len(groups) == len(manifest["timings"]) == 60
+for row in manifest["timings"]:
+    setting = tuple(row[k] for k in ("mesh", "solver", "ranks", "transport", "output"))
+    samples = groups.pop(setting)
+    assert len(samples) == int(row["valid_repeats"]) == 3
+    assert {s["hosts"] for s in samples} == {row["hosts"]}
+    for key, value in row.items():
+        if key.startswith("median_"):
+            field = key.removeprefix("median_")
+            assert np.isclose(float(value), median(float(s[field]) for s in samples), rtol=1e-12, atol=1e-12)
+assert not groups
+print("PASS CPU medians match 108 node13 repeats and 72 original two-node runs across all metrics")
+
 meta = json.loads((data / "partitions.json").read_text())
 for name, expected in [("coarse", 4), ("fine", 16)]:
     info = meta[name]
@@ -105,7 +145,9 @@ print("PASS all 20 rank shells are closed, including shared interfaces")
 
 options = json.loads((data.parent / "assets" / "solver-memory.json").read_text())
 assert len(options["cpu"]) == 180 and len(options["gpu"]) == 18
+assert {str(r["job"]) for r in options["cpu"]} == set(active_runs)
 for row in options["cpu"]:
+    assert row["hosts"] == active_runs[str(row["job"])]["hosts"]
     assert (row["hostKiB"] is not None) == (row["transport"] == "default")
 for row in options["gpu"]:
     assert row["hostKiB"] is not None
