@@ -62,6 +62,8 @@ The refinement FEniCSx run reached 29× gravity and 78.84 mm downward tip displa
 
 The original CPU runs included a slower memory configuration on node12, identified after the sweeps. Single-node rank comparisons pool unequal numbers of runs from each host, and all 32-rank runs include node12. [Hardware diagnosis and timing context](results/esmeralda/scaling.md#openseesmp-single-node-audit)
 
+The balanced follow-up validated 108 single-node timings on node13. On the fine mesh, OpenSeesMP and FEniCSx improved through 16 ranks, while Kratos reached its best time at 8. On the coarse mesh, 8 ranks was fastest for all three solvers. [Node13 timings](results/esmeralda/node13-timings.md)
+
 The smoke and fine sweeps validated all 180 runs. The final tables cover 4, 8, 16 and 32 MPI ranks, both field-output modes, and the 32-rank RoCE and TCP comparisons. [Final rank-by-rank timings](results/esmeralda/scaling-timings.md) · [RTX 5090 pilots](results/esmeralda/gpu-pilot.md)
 
 ![Stacked wall time split into solve, field output, and other wall time, with an enlarged output-time panel](results/report/pilot-timings.png)

@@ -1,6 +1,6 @@
 # Esmeralda rank scaling and beam limit
 
-[Illustrated model report](../../REPORT.md) · [Final timing tables](scaling-timings.md) · [Hardware](hardware.md) · [ParaView instructions](../VISUALIZATION.md) · [GPU pilots](gpu-pilot.md)
+[Illustrated model report](../../REPORT.md) · [Node13 timing tables](node13-timings.md) · [Original timing tables](scaling-timings.md) · [Hardware](hardware.md) · [ParaView instructions](../VISUALIZATION.md) · [GPU pilots](gpu-pilot.md)
 
 The two sweeps use the same 6 m steel cantilever, small-strain J2 perfect plasticity, and Gmsh ten-node tetrahedra. Kratos uses the installed Amesos MUMPS backend. Each mesh has 90 runs covering 4, 8, 16 and 32 MPI ranks, minimal and full output, and three repeats per setting. The 32-rank runs use 16 physical cores on each of nodes 12 and 13, with separate RoCE and TCP runs. The other tiers fit on one node.
 
@@ -51,9 +51,11 @@ These host-specific results show shorter wall times at higher ranks in the runs 
 
 ### Balanced node13 comparison
 
-The follow-up replaces the 55 single-node repeats originally run on node12 with 28 coarse and 27 fine runs pinned to node13. It retains the 53 validated original node13 runs. The resulting comparison has 54 runs per mesh, three per solver, rank count, and output mode at 4, 8, and 16 ranks. All replacement jobs use the archived solver inputs and the original installed solver releases.
+All 55 replacement jobs finished and validated. The follow-up combines 28 coarse and 27 fine reruns with 53 original node13 runs. The resulting comparison has 54 runs per mesh, three per solver, rank count, and output mode at 4, 8, and 16 ranks. The replacement runs used the archived inputs and original installed solver releases. Their final tip displacements, Newton iteration counts and field-output byte counts agreed with the replaced runs. [Node13 timing tables](node13-timings.md)
 
-On Esmeralda, `runs/node13-scaling/replacements.tsv` maps the original job IDs to 9760–9814. Job 9816 writes the coarse comparison to `runs/node13-scaling/coarse.md`. Job 9815 writes both meshes to `runs/node13-scaling/benchmark.md` after the reruns. The tables above describe the original campaign, including the 32-rank transport cases. [Submission script](../../cluster/replay_node13.py)
+On the fine mesh at minimal output, OpenSeesMP and FEniCSx cut median wall time by 20.1% and 24.6% from 4 to 16 ranks. Kratos was fastest at 8 ranks in both output modes. All three solvers had their lowest coarse-mesh medians at 8 ranks. [Coarse medians](node13-coarse-summary.csv) · [Coarse repeats](node13-coarse-measurements.csv) · [Fine medians](node13-fine-summary.csv) · [Fine repeats](node13-fine-measurements.csv)
+
+On Esmeralda, `runs/node13-scaling/replacements.tsv` maps the original job IDs to 9760–9814. Job 9816 wrote the coarse comparison to `runs/node13-scaling/coarse.md`. Job 9815 wrote both meshes to `runs/node13-scaling/benchmark.md`. The 32-rank transport comparison still uses the original campaign. [Job map](node13-replacements.tsv) · [Submission script](../../cluster/replay_node13.py)
 
 All paths below are relative to `/mnt/covadongaflash/users/jaabell/three-way-benchmark`. The tables give median launcher wall time in seconds by solver, rank count, network and output mode. Each cell includes the number of validated repeats. The CSVs also report solve time, field-output time, field bytes, iterations and final tip displacement. Raw results, solver logs, node inventory and rank binding are kept in each case directory.
 
