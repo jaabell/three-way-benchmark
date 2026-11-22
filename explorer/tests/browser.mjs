@@ -19,6 +19,10 @@ function monitor(page){
 try {
   const page=await browser.newPage({viewport:{width:1920,height:1080}});
   monitor(page);
+  const tensorRequests=[];
+  page.on('request',request=>{
+    if(new URL(request.url()).pathname.includes('/tensor-')) tensorRequests.push(request.url());
+  });
   await page.goto(target,{waitUntil:'networkidle'});
   const go=async (id)=>{
     await page.selectOption('#slide-picker',id);
@@ -55,10 +59,18 @@ try {
   const meshWithoutNodes=await page.locator('#mesh-coarse canvas').screenshot();
   await page.click('#mesh-nodes');
   assert.equal(await page.getAttribute('#mesh-nodes','aria-pressed'),'true');
-  assert.notDeepEqual(await page.locator('#mesh-coarse canvas').screenshot(),meshWithoutNodes);
+  const meshWithNodes=await page.locator('#mesh-coarse canvas').screenshot();
+  assert.notDeepEqual(meshWithNodes,meshWithoutNodes);
+  await page.locator('#mesh-node-key').waitFor();
+  assert.match(await page.locator('#mesh-node-key').innerText(),/3 midside nodes/);
   await capture('mesh-with-surface-nodes');
+  await page.check('#midside-only');
+  assert.notDeepEqual(await page.locator('#mesh-coarse canvas').screenshot(),meshWithNodes);
+  await capture('mesh-with-midside-nodes');
+  await page.uncheck('#midside-only');
   await page.click('#mesh-nodes');
   assert.equal(await page.getAttribute('#mesh-nodes','aria-pressed'),'false');
+  await page.locator('#mesh-node-key').waitFor({state:'hidden'});
   await go('partitions');
   await page.waitForSelector('#part-fine[data-separation="0"]');
   const assembled=await page.locator('#part-fine canvas').screenshot();
@@ -92,13 +104,46 @@ try {
     await page.waitForSelector(`#view-a[data-field="${key}"]`);
     await page.waitForSelector(`#view-b[data-field="${key}"]`);
     assert((await page.locator('#legend-title').innerText()).length>5);
+    assert.equal(await page.locator('#component-control').isVisible(),['stress','strain'].includes(key));
   }
+  assert.equal(tensorRequests.length,0);
   const info=manifest.meshes.fine;
   const geo=gunzipSync(await readFile(new URL('../data/fine.bin.gz',import.meta.url)));
   const idx=geo.readUInt32LE(4*(info.points*3+info.triangles*4));
   await page.fill('#element',String(idx));
   await page.click('#inspect button');
   assert.match(await page.locator('#inspect-readout').innerText(),new RegExp(`element ${idx} · MPI rank`));
+
+  for(const [family,label,unit] of [['stress','Stress','MPa'],['strain','Strain','mε']]){
+    await page.selectOption('#field',family);
+    const components=['xx','yy','zz','xy','yz','xz'];
+    assert.deepEqual(await page.locator('#component option').allTextContents(),
+      [...(family==='stress'?['von Mises']:[]),...components.map(key=>key.toUpperCase())]);
+    for(const key of components){
+      const field=family==='strain' && key==='xx' ? 'strain' : `${family}_${key}`;
+      await page.selectOption('#component',field);
+      for(const slot of ['a','b']) await page.waitForSelector(`#view-${slot}[data-field="${field}"]`);
+      const title=await page.locator('#legend-title').innerText();
+      assert(title.includes(`[${unit}] · shared scale`));
+      const ticks=await page.locator('#legend-ticks span').allTextContents();
+      assert.equal(ticks[0],'-'+ticks[4]);
+      assert.equal(ticks[2],'0');
+      const readout=await page.locator('#inspect-readout').innerText();
+      assert(readout.includes(field==='strain'?'Axial strain':`${label} ${key.toUpperCase()}`));
+      assert(readout.endsWith(unit));
+      if(field==='stress_xy' || field==='strain_yz') await capture(field.replace('_','-')+'-component');
+    }
+  }
+  assert.equal(tensorRequests.length,3,'tensor metadata and one companion frame per run');
+  await page.click('#reset-load');
+  await page.waitForSelector('#view-a[data-load="0"][data-field="strain_xz"]');
+  assert.match(await page.locator('#inspect-readout').innerText(),/Strain XZ 0 mε$/);
+  await page.fill('#load','29');
+  await page.waitForSelector('#view-a[data-load="29"][data-field="strain_xz"]');
+  await page.selectOption('#field','stress');
+  assert.equal(await page.inputValue('#component'),'stress_xz');
+  await page.selectOption('#component','stress');
+  await page.waitForSelector('#view-a[data-field="stress"]');
 
   const before=await page.locator('#view-b canvas').screenshot();
   await page.focus('#view-a');

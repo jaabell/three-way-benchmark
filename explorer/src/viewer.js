@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { quadraticNodeRoles } from './mesh-nodes.js';
 
 export const palette = ['#27398a', '#107c9b', '#56b887', '#e4ce54', '#f47c36'];
 export const diverging = ['#285aa4', '#70a7d4', '#f0eddf', '#e67950', '#a42032'];
@@ -71,8 +72,21 @@ export function createView(host, onPick, onCamera) {
   };
   const restMaterial = new THREE.LineBasicMaterial({color:0xd9e5d8, opacity:.31, transparent:true});
   const outlineMaterial = new THREE.LineBasicMaterial({color:0xffffff, depthTest:false});
-  const nodeMaterial = new THREE.PointsMaterial({color:0xffdf87,size:2.6,sizeAttenuation:false,depthWrite:false});
-  let mesh, rest, nodeLayer, outline, structure, px, py;
+  const nodeMaterials = [
+    new THREE.PointsMaterial({color:0xf4f7ff,size:3.0,sizeAttenuation:false,depthWrite:false}),
+    new THREE.PointsMaterial({color:0xffb35e,size:4.4,sizeAttenuation:false,depthWrite:false})
+  ];
+  nodeMaterials.forEach((points,role)=>{
+    points.onBeforeCompile = (shader) => {
+      // Resolve exact coplanarity against the mesh while keeping the back surfaces occluded.
+      shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>',
+        '#include <project_vertex>\ngl_Position.z -= 0.000025 * gl_Position.w;');
+      if(role===1) shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>',
+        'if (length(gl_PointCoord - vec2(0.5)) > 0.49) discard;\n#include <opaque_fragment>');
+    };
+    points.customProgramCacheKey=()=>`t10-node-${role}`;
+  });
+  let mesh, rest, nodeLayer, outline, structure, displayPoints, px, py;
   let syncing = false;
   let domains = [];
   const brush = new THREE.Color();
@@ -117,10 +131,14 @@ export function createView(host, onPick, onCamera) {
     if (structure === data) return;
     structure = data;
     if (mesh) {
-      scene.remove(mesh, rest, nodeLayer, outline);
+      scene.remove(mesh, rest, outline);
+      if(nodeLayer) {
+        scene.remove(nodeLayer);
+        nodeLayer.children.forEach(points=>points.geometry.dispose());
+        nodeLayer=null;
+      }
       mesh.geometry.dispose();
       rest.geometry.dispose();
-      nodeLayer.geometry.dispose();
       outline.geometry.dispose();
     }
     const surface = new THREE.BufferGeometry();
@@ -139,13 +157,10 @@ export function createView(host, onPick, onCamera) {
     indexed.setIndex(new THREE.BufferAttribute(data.tri, 1));
     rest = new THREE.LineSegments(new THREE.EdgesGeometry(indexed, 29), restMaterial);
     indexed.dispose();
-    const nodeGeometry = new THREE.BufferGeometry();
-    nodeGeometry.setAttribute('position',new THREE.BufferAttribute(xyz,3));
-    nodeLayer = new THREE.Points(nodeGeometry,nodeMaterial);
-    nodeLayer.visible = false;
+    displayPoints=xyz;
     outline = new THREE.LineSegments(new THREE.BufferGeometry(), outlineMaterial);
     outline.renderOrder = 10;
-    scene.add(mesh, rest, nodeLayer, outline);
+    scene.add(mesh, rest, outline);
   }
 
   function highlight(selected) {
@@ -168,7 +183,7 @@ export function createView(host, onPick, onCamera) {
     const pos = mesh.geometry.getAttribute('position');
     const rgb = mesh.geometry.getAttribute('color');
     const bases = data.xyz, ix = data.tri, u = frame.u;
-    const lookup = state.field === 'strain' ? diverge : colors;
+    const lookup = state.signed ? diverge : colors;
     const [lo,hi] = domain;
     for (let k = 0; k < ix.length; k++) {
       const point = ix[k]*3, i = k*3;
@@ -228,8 +243,26 @@ export function createView(host, onPick, onCamera) {
   }
 
   return {update,setDomains,
-    showNodes(show) {
-      if(nodeLayer){nodeLayer.visible=show;render();}
+    showNodes(show,midsideOnly=false) {
+      if(show && !nodeLayer && structure) {
+        const roles=quadraticNodeRoles(structure);
+        const positions=[[],[]];
+        roles.forEach((role,point)=>positions[role].push(...displayPoints.subarray(3*point,3*point+3)));
+        nodeLayer=new THREE.Group();
+        positions.forEach((coords,role)=>{
+          const geometry=new THREE.BufferGeometry();
+          geometry.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+          const points=new THREE.Points(geometry,nodeMaterials[role]);
+          points.renderOrder=role+2;
+          nodeLayer.add(points);
+        });
+        scene.add(nodeLayer);
+      }
+      if(nodeLayer) {
+        nodeLayer.visible=show;
+        nodeLayer.children[0].visible=!midsideOnly;
+        render();
+      }
     },
     spread(fraction) {
       for(const {model,offset} of domains) model.position.copy(offset).multiplyScalar(fraction);

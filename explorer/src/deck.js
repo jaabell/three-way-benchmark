@@ -1,4 +1,5 @@
 import {createView} from './viewer.js';
+import {drawQuadraticFace} from './mesh-nodes.js';
 
 const $ = (id)=>document.getElementById(id);
 const sections = [...document.querySelectorAll('#deck section[data-title]')];
@@ -142,8 +143,11 @@ export function setupFigures(read, meshData, manifest, runs) {
   const meshNodes = $('mesh-nodes');
   const showMeshNodes = () => {
     const show = meshNodes.getAttribute('aria-pressed') === 'true';
-    states.meshes.views.forEach(view=>view.showNodes(show));
+    $('mesh-node-options').hidden=!show;
+    $('mesh-node-key').hidden=!show;
+    states.meshes.views.forEach(view=>view.showNodes(show,$('midside-only').checked));
   };
+  $('midside-only').addEventListener('change',showMeshNodes);
   meshNodes.addEventListener('click',()=>{
     const show = meshNodes.getAttribute('aria-pressed') !== 'true';
     meshNodes.setAttribute('aria-pressed',String(show));
@@ -193,6 +197,7 @@ export function setupFigures(read, meshData, manifest, runs) {
           host.dataset.triangles=String(meshes[i].info.triangles);
         });
         state.views[0].preset('detail');
+        drawQuadraticFace(meshes[0],$('mesh-face-detail'));
         showMeshNodes();
       } else {
         state.views.forEach((view,i)=>view.setDomains(partitionData[i]));

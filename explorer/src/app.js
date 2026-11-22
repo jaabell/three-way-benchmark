@@ -10,15 +10,28 @@ const labels = {
   elastic: ['Elastic energy density','kJ/m³'], dissipation: ['Plastic dissipation density','kJ/m³'],
   partition: ['MPI partition','rank']
 };
+const components = ['xx','yy','zz','xy','yz','xz'];
+const tensorKeys = ['stress','strain'].flatMap(kind=>components.map(key=>`${kind}_${key}`));
+const familyOptions = {
+  stress:[['stress','von Mises'], ...components.map(key=>[`stress_${key}`,key.toUpperCase()])],
+  strain:components.map(key=>[key==='xx'?'strain':`strain_${key}`,key.toUpperCase()])
+};
+for(const kind of ['stress','strain']) {
+  for(const key of components) labels[`${kind}_${key}`]=[
+    `${kind==='stress'?'Stress':'Strain'} ${key.toUpperCase()}`,kind==='stress'?'MPa':'mε'
+  ];
+}
+const signedField = (field) => field==='strain' || tensorKeys.includes(field);
 const meshName = {fine:'Fine',smoke:'Coarse'};
 const slots = ['a','b'];
 const state = {runs: [], field:'stress', scale:1, step:29, wire:true, ghost:true,
   chart:'force', curveStep:29, timingMesh:'fine', playing:false, pin:null};
-const meshCache = new Map(), frames = new Map(), parts = new Map();
+const meshCache = new Map(), frames = new Map(), tensorFrames = new Map(), parts = new Map();
 const scenes = [null,null];
 let manifest, loaded = [], revision = 0, timer = 0;
 let webgl = true;
 let startedFields = false;
+let tensorRequest, tensorRanges;
 const getRun = (slot) => state.runs[slot];
 const maxStep = () => Math.min(...state.runs.map(r=>r.traces.length-1));
 const nfmt = new Intl.NumberFormat('en',{maximumFractionDigits:3});
@@ -88,6 +101,22 @@ function caseFrame(run, step) {
   },12);
 }
 
+async function caseTensor(run,step) {
+  tensorRequest??=read('./data/tensor-fields.json').catch(error=>{tensorRequest=null;throw error;});
+  const metadata=await tensorRequest;
+  if(metadata.fields.join()!==tensorKeys.join() || metadata.frames[run.id]!==run.traces.length-1)
+    throw Error('Tensor metadata differs from the archived run');
+  tensorRanges=metadata.ranges;
+  return cached(tensorFrames,`${run.id}/${step}`,async()=>{
+    const count=manifest.meshes[run.mesh].surfaceCells;
+    const size=4*count*tensorKeys.length;
+    const buffer=step===0 ? new ArrayBuffer(size) :
+      await read(`./data/${run.id}/tensor-${String(step).padStart(2,'0')}.bin.gz`,true);
+    if(buffer.byteLength!==size) throw Error('Incorrect tensor buffer length');
+    return Object.fromEntries(tensorKeys.map((key,i)=>[key,new Float32Array(buffer,4*i*count,count)]));
+  },12);
+}
+
 function partitionData(run) {
   return cached(parts,run.id,async()=>{
     const buffer=await read(`./data/${run.id}/partition.bin.gz`,true);
@@ -100,11 +129,11 @@ function domain() {
   if(state.field==='geometry')return [0,1];
   if(state.field==='partition')return [0,Math.max(...state.runs.map(r=>r.ranks))-1];
   if(state.field==='stress')return [0,250];
-  const extents=manifest.runs.map(r=>r.levels[state.field]);
+  const extents=tensorKeys.includes(state.field)?[tensorRanges[state.field]]:manifest.runs.map(r=>r.levels[state.field]);
   const absolute=Math.max(...extents.flatMap(pair=>pair.map(Math.abs)));
   const size=10**Math.floor(Math.log10(Math.max(absolute,1e-8)));
   const bound=Math.ceil(absolute/size*2)*size/2;
-  return [state.field==='strain' ? -bound : 0,bound];
+  return [signedField(state.field) ? -bound : 0,bound];
 }
 
 function drawLegend(range) {
@@ -119,7 +148,7 @@ function drawLegend(range) {
   const [title,unit]=labels[state.field];
   $('legend-title').textContent=categorical ? 'MPI rank ownership · zero-based' :
     `${title} [${unit}] · ${state.field==='stress'?'nominal yield at 250 MPa':'shared scale'}`;
-  const colors=categorical ? partitions.slice(0,range[1]+1) : (state.field==='strain'?diverging:palette);
+  const colors=categorical ? partitions.slice(0,range[1]+1) : (signedField(state.field)?diverging:palette);
   if(categorical) {
     bar.style.background=colors.length===1 ? colors[0] : `linear-gradient(90deg,${colors.map((color,i)=>`${color} ${100*i/colors.length}% ${100*(i+1)/colors.length}%`).join(',')})`;
   } else bar.style.background=`linear-gradient(90deg,${colors.join(',')})`;
@@ -139,7 +168,7 @@ function inspect(slot, cell) {
 }
 function showPin() {
   const next=state.pin && loaded[state.pin.slot];
-  if(!next || next.run.id!==state.pin.run) return;
+  if(!next || next.run.id!==state.pin.run || next.step!==state.step) return;
   const {geometry,frame,part,run}=next, cell=state.pin.cell;
   const display=`${run.solver} · element ${geometry.ids[cell]} · MPI rank ${part[cell]}`;
   if(state.field==='geometry') {
@@ -158,12 +187,13 @@ function showPin() {
 }
 
 function renderScenes() {
+  if(tensorKeys.includes(state.field) && (loaded.length!==2 || loaded.some(data=>!data.frame[state.field])))return;
   const range=domain();
   drawLegend(range);
   loaded.forEach((data,slot)=>{
     if(data.run.id!==getRun(slot).id || data.step!==state.step)return;
     const cell=state.pin?.slot===slot && state.pin.run===data.run.id ? state.pin.cell : null;
-    const settings=state.field==='geometry'?{...state,wire:true}:state;
+    const settings={...state,wire:state.field==='geometry'||state.wire,signed:signedField(state.field)};
     scenes[slot]?.update(data.geometry,data.frame,data.part,settings,range,cell);
     const viewport=$('view-'+slots[slot]);
     viewport.dataset.run=data.run.id;
@@ -198,9 +228,12 @@ async function refresh() {
     loading=setTimeout(()=>{
       if(id===revision)slots.forEach(x=>{$('status-'+x).hidden=false;$('status-'+x).textContent=`Loading ${step}× gravity…`;});
     },160);
+    const withTensor=tensorKeys.includes(state.field);
     const prepared=await Promise.all(state.runs.map(async(run)=>{
-      const [geometry,frame,part] = await Promise.all([meshData(run),caseFrame(run,step),partitionData(run)]);
-      return {run,step,geometry,frame,part};
+      const [geometry,frame,part,tensor] = await Promise.all([
+        meshData(run),caseFrame(run,step),partitionData(run),withTensor?caseTensor(run,step):null
+      ]);
+      return {run,step,geometry,frame:tensor?{...frame,...tensor}:frame,part};
     }));
     if(id!==revision)return;
     loaded=prepared;
@@ -272,7 +305,7 @@ function initView() {
     webgl=false;
     $('fallback').hidden=false;
     slots.forEach(id=>{$('status-'+id).textContent='3D unavailable in this browser';});
-    for (const id of ['field','scale','wire','ghost','camera-orbit','camera-side','camera-end','camera-detail','inspect-run','element']) $(id).disabled=true;
+    for (const id of ['field','component','scale','wire','ghost','camera-orbit','camera-side','camera-end','camera-detail','inspect-run','element']) $(id).disabled=true;
     $('inspect').querySelector('button').disabled=true;
   }
 }
@@ -292,12 +325,26 @@ async function main() {
       setStep(state.step);
     });
   });
-  $('field').addEventListener('change',()=>{
-    state.field=$('field').value;
+  const selections={stress:'stress',strain:'strain'};
+  function chooseField() {
+    pause();
+    const family=$('field').value, choices=familyOptions[family];
+    $('component-control').hidden=!choices;
+    if(choices) {
+      $('component').replaceChildren(...choices.map(([key,label])=>new Option(label,key)));
+      $('component').value=selections[family];
+    }
+    state.field=choices?selections[family]:family;
     $('wire').disabled=state.field==='geometry';
     $('wire').checked=state.field==='geometry'||state.wire;
-    renderScenes();
+    refresh();
+  }
+  $('field').addEventListener('change',chooseField);
+  $('component').addEventListener('change',()=>{
+    selections[$('field').value]=$('component').value;
+    chooseField();
   });
+  $('component').replaceChildren(...familyOptions.stress.map(([key,label])=>new Option(label,key)));
   $('scale').addEventListener('change',()=>{state.scale=Number($('scale').value);renderScenes();});
   for(const key of ['wire','ghost'])$(key).addEventListener('change',()=>{state[key]=$(key).checked;renderScenes();});
   for(const mode of ['orbit','side','end','detail'])$('camera-'+mode).addEventListener('click',()=>scenes[0]?.preset(mode));

@@ -17,6 +17,14 @@ assert abs(29 * manifest["theory"]["reference_weight_N"] / 1000 - 199.5840582015
 assert abs(manifest["reference"][-1][1] - 191.9791666667) < 1e-8
 assert len(manifest["runs"]) == 7
 assert len({r["job"] for r in manifest["runs"]}) == 7
+tensor_meta = json.loads((data / "tensor-fields.json").read_text())
+tensor_fields = [f"{family}_{key}" for family in ("stress", "strain")
+                 for key in ("xx", "yy", "zz", "xy", "yz", "xz")]
+assert tensor_meta["fields"] == tensor_fields
+assert sum(tensor_meta["frames"].values()) == 207
+for field in tensor_fields:
+    lo, hi = tensor_meta["ranges"][field]
+    assert lo < 0 < hi
 for mesh, info in manifest["meshes"].items():
     raw = gzip.decompress((data / f"{mesh}.bin.gz").read_bytes())
     counts = (3 * info["points"], 3 * info["triangles"], info["triangles"], info["surfaceCells"])
@@ -29,6 +37,14 @@ for mesh, info in manifest["meshes"].items():
     assert np.allclose(xyz.min(axis=0), [0, -.1, -.2], atol=3e-7)
     assert np.allclose(xyz.max(axis=0), [6, .1, .2], atol=3e-7)
     assert ix.max() < info["points"] and source_cells.max() < info["surfaceCells"]
+    faces = ix.reshape(-1, 12)
+    corners = faces[:, [0, 4, 8]]
+    midsides = faces[:, 9:12]
+    assert len(np.intersect1d(corners, midsides)) == 0
+    assert len(np.unique(np.concatenate((corners, midsides), axis=1))) == info["points"]
+    edge_midpoints = (xyz[corners] + xyz[corners[:, [1, 2, 0]]]) / 2
+    assert np.allclose(edge_midpoints, xyz[midsides], rtol=0, atol=5e-7)
+    print(mesh, "surface corners", len(np.unique(corners)), "midsides", len(np.unique(midsides)))
     assert 1 <= ids.min() <= ids.max() <= info["elements"]
     assert np.all(np.diff(ids) > 0)
     clamp = xyz[:, 0] == 0
@@ -37,6 +53,7 @@ for mesh, info in manifest["meshes"].items():
         part = np.frombuffer(gzip.decompress((directory / "partition.bin.gz").read_bytes()), "<u2")
         assert len(part) == info["surfaceCells"] and part.max() < run["ranks"]
         stop = 29 if mesh == "fine" else 30
+        assert tensor_meta["frames"][run["id"]] == stop
         assert [t[0] for t in run["traces"]] == list(range(stop + 1))
         reference_tip_mm = 78.83943 if mesh == "fine" else 127.52811
         assert abs(run["traces"][-1][1] - reference_tip_mm) < 0.001
@@ -53,12 +70,20 @@ for mesh, info in manifest["meshes"].items():
                 lo, hi = run["levels"][field]
                 assert values.min() >= lo - 2e-6 * max(1, abs(lo))
                 assert values.max() <= hi + 2e-6 * max(1, abs(hi))
+            raw_tensor = gzip.decompress((directory / f"tensor-{i:02d}.bin.gz").read_bytes())
+            tensor = np.frombuffer(raw_tensor, "<f4").reshape(len(tensor_fields), counts[3])
+            assert np.isfinite(tensor).all()
+            assert np.array_equal(tensor[6], fields[manifest["fields"].index("strain")])
+            for field, values in zip(tensor_fields, tensor, strict=True):
+                lo, hi = tensor_meta["ranges"][field]
+                assert values.min() >= lo - 2e-6 * max(1, abs(lo))
+                assert values.max() <= hi + 2e-6 * max(1, abs(hi))
 for suite in ["smoke-scaling", "refinement-scaling"]:
     with (data / f"{suite}-measurements.csv").open() as stream:
         runs = list(csv.DictReader(stream))
     groups = Counter((r["solver"], r["ranks"], r["transport"], r["output"]) for r in runs)
     assert len(runs) == 90 and set(groups.values()) == {3}
-print("PASS 207 accepted field frames, clamped geometry, seven run histories, beam reference, and 180 timing runs")
+print("PASS 207 accepted frames with 12 signed tensor components, clamped geometry, seven run histories, beam reference, and 180 timing runs")
 
 meta = json.loads((data / "partitions.json").read_text())
 for name, expected in [("coarse", 4), ("fine", 16)]:
