@@ -73,19 +73,23 @@ def submit(command):
     return job
 
 
-def submit_suite(suite, selected, launchers, gates, replacements):
+def submit_suite(suite, selected, launchers, gates, replacements, *,
+                 campaign=CAMPAIGN, target_host="node13", replay_all=False):
     original = RUNS / suite
     source = original / "inputs"
     mesh = ROOT / "build" / SUITES[suite][0]
-    dest = CAMPAIGN / suite
+    dest = campaign / suite
     dest.mkdir()
     calibration = json.loads((original / "calibration.json").read_text())
     model = json.loads((mesh / "model.json").read_text())
     if model["mesh_sha256"] != calibration["mesh_sha256"]:
         raise ValueError(f"Archived calibration and mesh differ for {suite}")
+    digest = hashlib.sha256()
     with (mesh / "mesh.npz").open("rb") as data:
-        if hashlib.file_digest(data, "sha256").hexdigest() != calibration["mesh_sha256"]:
-            raise ValueError(f"Mesh data have changed for {suite}")
+        for block in iter(lambda: data.read(1024 * 1024), b""):
+            digest.update(block)
+    if digest.hexdigest() != calibration["mesh_sha256"]:
+        raise ValueError(f"Mesh data have changed for {suite}")
     shutil.copyfile(original / "calibration.json", dest / "calibration.json")
     shutil.copyfile(mesh / "model.json", dest / "model.json")
     site = dest / "site.sh"
@@ -102,17 +106,18 @@ def submit_suite(suite, selected, launchers, gates, replacements):
         for case, host in selected:
             name, solver, ranks = (case[k] for k in ("case", "solver", "ranks"))
             old = original / name
-            if host == "node13":
+            if host == target_host and not replay_all:
                 (dest / name).symlink_to(old, target_is_directory=True)
-                writer.writerow({**case, "host": "node13"})
+                writer.writerow({**case, "host": target_host})
                 continue
             cap, = re.findall(r"\bTimeLimit=(\S+)", (old / "allocation.txt").read_text())
             first = (old / "first_factor.txt").read_text().strip()
             dependency = [f"--dependency=afterok:{gates[solver]}", "--kill-on-invalid-dep=yes"] if solver in gates else []
             job = submit([
-                "--partition=new", "--nodelist=node13", "--mem=54G", f"--time={cap}",
+                "--partition=new", f"--nodelist={target_host}", "--mem=54G", f"--time={cap}",
                 "--exclusive", "--hint=nomultithread", "--nodes=1", "--cpus-per-task=1",
-                f"--ntasks={ranks}", f"--ntasks-per-node={ranks}", f"--job-name=n13-{name}",
+                f"--ntasks={ranks}", f"--ntasks-per-node={ranks}",
+                f"--job-name=n{target_host.removeprefix('node')}-{name}",
                 f"--output={dest}/slurm-%j.log", "--export=ALL,BENCH_TRANSPORT_LAUNCHER=prrte",
                 *dependency, str(source / "cluster/run.sbatch"),
                 *map(str, (source, site, mesh, dest / name, solver, ranks, case["transport"],
@@ -121,16 +126,15 @@ def submit_suite(suite, selected, launchers, gates, replacements):
             ])
             gates.setdefault(solver, job)
             replacements.writerow((suite, name, case["slurm_job"], job))
-            writer.writerow({**case, "slurm_job": job, "host": "node13"})
+            writer.writerow({**case, "slurm_job": job, "host": target_host})
             manifest.flush()
             print(f"{suite}\t{name}\t{case['slurm_job']}\t{job}", flush=True)
 
 
-def main():
-    selected = {suite: select_cases(suite) for suite in SUITES}
+def prepare_launchers(campaign):
     wrappers = pinned_wrappers()
-    CAMPAIGN.mkdir(exist_ok=False)
-    bin_dir = CAMPAIGN / "launchers"
+    campaign.mkdir(exist_ok=False)
+    bin_dir = campaign / "launchers"
     bin_dir.mkdir()
     launchers = {}
     for original, content in wrappers.items():
@@ -140,6 +144,12 @@ def main():
         # The archived profiles refer either to an absolute wrapper or to the software/bin variable.
         key = str(original) if original.parent == Path("/mnt/nfshare/bin") else f"$software/{original.name}"
         launchers[key] = launcher
+    return launchers
+
+
+def main():
+    selected = {suite: select_cases(suite) for suite in SUITES}
+    launchers = prepare_launchers(CAMPAIGN)
     with (CAMPAIGN / "replacements.tsv").open("w", buffering=1) as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(("suite", "case", "original_job", "node13_job"))

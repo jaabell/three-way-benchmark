@@ -12,6 +12,8 @@ The compute nodes run Debian 13 and Slurm 24.11.5. The login host runs Ubuntu 22
 
 After the CPU sweeps, a memory misconfiguration was identified as the cause of the slowdown on node12. The RAM figures above show the capacity reported during the runs. [Timing interpretation and host breakdown](scaling.md#openseesmp-single-node-audit)
 
+The November 23 coarse sweep repeated the single-node benchmark after the memory fix. [Post-fix node12 verification](node12-memory-fix.md)
+
 The GPU pilots run on `gpu01`, with a Ryzen 9 9950X (16 cores, 32 threads), 60,000 MiB schedulable RAM, and a GeForce RTX 5090 reporting 32,607 MiB VRAM and compute capability 12.0. The host has a Kingston KC3000 NVMe drive and two active Mellanox ConnectX-4 Lx RoCE ports. Slurm inventory job 9684 records NVIDIA driver 615.71.09. [GPU configurations and measurements](gpu-pilot.md)
 
 | Solver | Installed pilot build |
