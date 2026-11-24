@@ -1,5 +1,12 @@
 # Run with OpenSeesMP. Each rank builds its own Gmsh partition.
 lassign $argv mesh output mode target steps tolerance maxIterations firstFactor
+set exploration [lrange $argv 8 end]
+set recorderMode tcl
+if {[llength $exploration]} {
+    if {[llength $exploration] != 5} {error "Expected material system algorithm recorder flush"}
+    lassign $exploration material solver nonlinear recorderMode recorderFlush
+    source [file join [file dirname [info script]] opensees-explore.tcl]
+}
 if {$firstFactor eq ""} {set firstFactor 0}
 source [file join $mesh model.tcl]
 set rank [getPID]
@@ -13,7 +20,11 @@ set E [expr {$young_modulus_pa / $force_unit_n}]
 set K [expr {$E / (3.0 * (1.0 - 2.0 * $poisson_ratio))}]
 set G [expr {$E / (2.0 * (1.0 + $poisson_ratio))}]
 set fy [expr {$yield_stress_pa / $force_unit_n}]
-nDMaterial J2Plasticity 1 $K $G $fy $fy 0.0 0.0
+if {[llength $exploration]} {
+    benchmarkMaterial $material $E $K $G $poisson_ratio $fy
+} else {
+    nDMaterial J2Plasticity 1 $K $G $fy $fy 0.0 0.0
+}
 
 set hasTip 0
 foreach row $nodes {
@@ -40,10 +51,10 @@ if {$size == 1} {
     system UmfPack
 } else {
     numberer ParallelRCM
-    system Mumps
+    if {[llength $exploration]} {benchmarkSystem $solver} else {system Mumps}
 }
 test NormUnbalance [expr {$tolerance / $force_unit_n}] $maxIterations
-algorithm Newton
+if {[llength $exploration]} {benchmarkAlgorithm $nonlinear} else {algorithm Newton}
 set uniformIncrement [expr {double($target) / $steps}]
 set firstIncrement [expr {$firstFactor > 0 ? $firstFactor : $uniformIncrement}]
 integrator LoadControl $firstIncrement
@@ -72,8 +83,17 @@ proc writeFields {step nodes elements nodeFile cellFile forceUnit} {
 set progress [open [file join $output progress-$rank.csv] w]
 puts $progress "step,factor,iterations,solve_s,output_s,tip_uz_m"
 if {$mode eq "full"} {
-    set nodeFile [open [file join $output nodes-$rank.bin] wb]
-    set cellFile [open [file join $output cells-$rank.bin] wb]
+    switch -- $recorderMode {
+        tcl {
+            set nodeFile [open [file join $output nodes-$rank.bin] wb]
+            set cellFile [open [file join $output cells-$rank.bin] wb]
+        }
+        ladruno {
+            recorder ladruno [file join $output fields.ladruno] -N displacement \
+                -E stresses strains -kind static -precision f64 -compress 1 -flush $recorderFlush
+        }
+        default {error "Unknown recorder: $recorderMode"}
+    }
 }
 barrier
 for {set step 1} {$step <= $steps} {incr step} {
@@ -86,7 +106,7 @@ for {set step 1} {$step <= $steps} {incr step} {
     if {$code != 0} {error "Newton failed at step $step (return code $code)"}
 
     set fieldTime 0
-    if {$mode eq "full"} {
+    if {$mode eq "full" && $recorderMode eq "tcl"} {
         set start [clock microseconds]
         writeFields $step $nodes $elements $nodeFile $cellFile $force_unit_n
         set fieldTime [expr {([clock microseconds] - $start) * 1.0e-6}]
@@ -99,8 +119,18 @@ for {set step 1} {$step <= $steps} {incr step} {
     flush $progress
 }
 if {$mode eq "full"} {
-    close $nodeFile
-    close $cellFile
+    set start [clock microseconds]
+    if {$recorderMode eq "tcl"} {
+        close $nodeFile
+        close $cellFile
+    } else {
+        remove recorders
+    }
+    if {[llength $exploration]} {
+        set closeFile [open [file join $output close-$rank.txt] w]
+        puts $closeFile [expr {([clock microseconds] - $start) * 1.0e-6}]
+        close $closeFile
+    }
 }
 close $progress
 barrier
